@@ -32,12 +32,15 @@ export default function AdminPage() {
   const fetchLicenses = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/licenses")
+      const data = await res.json()
       if (res.ok) {
-        const data = await res.json()
-        setLicenses(data.licenses)
+        setLicenses(data.licenses ?? [])
+      } else {
+        toast.error(data.error || "Failed to fetch licenses")
       }
-    } catch {
-      toast.error("Failed to fetch licenses")
+    } catch (err) {
+      console.error("License fetch error:", err)
+      toast.error("Failed to connect to license database. Check MONGODB_URI in Vars.")
     } finally {
       setFetching(false)
     }

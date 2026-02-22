@@ -12,7 +12,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { allowed } = rateLimit(`servers:${session.userId}`, 6, 60000)
+    const { allowed } = rateLimit(`servers:${session.userId}`, 30, 60000)
     if (!allowed) {
       return NextResponse.json({ error: "Rate limited" }, { status: 429 })
     }
@@ -26,6 +26,11 @@ export async function GET() {
     }
 
     const serverData = await getServers(config.placeId)
+
+    console.log("[v0] Raw server data count:", serverData.data.length)
+    if (serverData.data.length > 0) {
+      console.log("[v0] First server raw:", JSON.stringify(serverData.data[0]))
+    }
 
     const servers = serverData.data.map(
       (s: { id: string; playing: number; maxPlayers: number; fps: number; ping: number; playerTokens: string[] }) => ({

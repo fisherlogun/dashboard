@@ -11,8 +11,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Rate limit: 1 request per 10 seconds per user
-    const { allowed } = rateLimit(`stats:${session.userId}`, 6, 60000)
+    const { allowed } = rateLimit(`stats:${session.userId}`, 30, 60000)
     if (!allowed) {
       return NextResponse.json(
         { error: "Rate limited. Please wait before refreshing." },
