@@ -10,8 +10,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Roblox Dashboard',
-  description: 'Manage your Roblox experience with real-time statistics, in-game commands, and admin controls.',
+  title: 'Nexus | Roblox Server Dashboard',
+  description: 'Professional Roblox game server management. Real-time monitoring, player management, commands, and administration.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -34,8 +34,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f5f5fa' },
-    { media: '(prefers-color-scheme: dark)', color: '#1a1a2e' },
+    { media: '(prefers-color-scheme: light)', color: '#f2f4f7' },
+    { media: '(prefers-color-scheme: dark)', color: '#171b2d' },
   ],
 }
 

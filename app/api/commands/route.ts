@@ -13,8 +13,20 @@ const commandSchema = z.discriminatedUnion("type", [
     reason: z.string().max(200).optional().default("No reason provided"),
   }),
   z.object({
+    type: z.literal("ban"),
+    userId: z.string().min(1, "Player user ID is required"),
+    reason: z.string().max(200).optional().default("No reason provided"),
+    duration: z.string().min(1, "Duration is required"),
+  }),
+  z.object({
+    type: z.literal("warn"),
+    userId: z.string().min(1, "Player user ID is required"),
+    reason: z.string().min(1, "Reason is required").max(200),
+  }),
+  z.object({
     type: z.literal("announce"),
     message: z.string().min(1, "Message is required").max(500),
+    serverId: z.string().optional(),
   }),
 ])
 
@@ -84,6 +96,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (command.type === "ban" && !hasPermission(session.role, "execute_ban")) {
+      return NextResponse.json(
+        { error: "You do not have permission to ban players" },
+        { status: 403 }
+      )
+    }
+
+    if (command.type === "warn" && !hasPermission(session.role, "execute_warn")) {
+      return NextResponse.json(
+        { error: "You do not have permission to warn players" },
+        { status: 403 }
+      )
+    }
+
     // Build the message payload
     const payload = JSON.stringify({
       ...command,
@@ -103,7 +129,11 @@ export async function POST(request: NextRequest) {
       const details =
         command.type === "kick"
           ? `Kicked user ${command.userId}: ${command.reason}`
-          : `Announcement: ${command.message}`
+          : command.type === "ban"
+            ? `Banned user ${command.userId} for ${command.duration}: ${command.reason}`
+            : command.type === "warn"
+              ? `Warned user ${command.userId}: ${command.reason}`
+              : `Announcement: ${command.message}`
 
       addActionLog({
         userId: session.userId,

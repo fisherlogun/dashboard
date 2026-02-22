@@ -41,8 +41,8 @@ export function StatsChart({
             <AreaChart data={formatted}>
               <defs>
                 <linearGradient id="playerGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="oklch(0.62 0.22 260)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="oklch(0.62 0.22 260)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="oklch(0.75 0.15 190)" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="oklch(0.75 0.15 190)" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
@@ -60,18 +60,18 @@ export function StatsChart({
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "oklch(0.16 0.02 260)",
-                  border: "1px solid oklch(0.25 0.02 260)",
+                  backgroundColor: "oklch(0.16 0.015 240)",
+                  border: "1px solid oklch(0.24 0.015 240)",
                   borderRadius: "8px",
-                  color: "oklch(0.93 0.01 260)",
+                  color: "oklch(0.90 0.01 240)",
                   fontSize: "12px",
                 }}
-                labelStyle={{ color: "oklch(0.6 0.02 260)" }}
+                labelStyle={{ color: "oklch(0.55 0.015 240)" }}
               />
               <Area
                 type="monotone"
                 dataKey="players"
-                stroke="oklch(0.62 0.22 260)"
+                stroke="oklch(0.75 0.15 190)"
                 strokeWidth={2}
                 fill="url(#playerGradient)"
               />

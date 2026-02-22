@@ -94,11 +94,6 @@ export default function LogsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <ScrollText className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-semibold text-foreground">Activity Log</h2>
-      </div>
-
       <Card className="border-border/50">
         <CardHeader>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

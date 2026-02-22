@@ -8,6 +8,7 @@ import {
 } from "@/lib/auth"
 import { exchangeCodeForTokens, getUserInfo } from "@/lib/roblox"
 import { getUserRole, setUserRole, getAllRoles, isSetupComplete } from "@/lib/db"
+import { isLicensed, isGlobalAdmin } from "@/lib/admin"
 
 function getBaseUrl(request: NextRequest): string {
   if (process.env.NEXT_PUBLIC_BASE_URL) return process.env.NEXT_PUBLIC_BASE_URL
@@ -61,6 +62,18 @@ export async function GET(request: NextRequest) {
 
     // Get user info
     const userInfo = await getUserInfo(tokens.access_token)
+
+    // Check license - global admin always allowed, otherwise must be licensed
+    const userId = userInfo.sub
+    const isAdmin = isGlobalAdmin(userId)
+    if (!isAdmin) {
+      const licensed = await isLicensed(userId)
+      if (!licensed) {
+        return NextResponse.redirect(
+          new URL("/unauthorized", baseUrl)
+        )
+      }
+    }
 
     // Determine role - first user becomes owner
     let existingRole = getUserRole(userInfo.sub)
