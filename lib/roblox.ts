@@ -4,6 +4,7 @@ const ROBLOX_OAUTH_BASE = "https://apis.roblox.com/oauth/v1"
 const ROBLOX_CLOUD_BASE = "https://apis.roblox.com/cloud/v2"
 const ROBLOX_GAMES_BASE = "https://games.roblox.com/v1"
 const ROBLOX_THUMBNAILS_BASE = "https://thumbnails.roblox.com/v1"
+const ROBLOX_DATASTORE_BASE = "https://apis.roblox.com/datastores/v1"
 
 // ---------- OAuth ----------
 
@@ -219,6 +220,99 @@ export async function getGameThumbnail(
 ): Promise<string | null> {
   const res = await fetch(
     `${ROBLOX_THUMBNAILS_BASE}/games/icons?universeIds=${universeId}&returnPolicy=PlaceHolder&size=150x150&format=Png&isCircular=false`
+  )
+  if (!res.ok) return null
+  const data = await res.json()
+  return data.data?.[0]?.imageUrl ?? null
+}
+
+// ---------- DataStore APIs ----------
+
+export async function getDatastoreEntry(
+  universeId: string,
+  datastoreName: string,
+  scope: string,
+  key: string,
+  apiKey: string
+): Promise<unknown> {
+  const url = new URL(
+    `${ROBLOX_DATASTORE_BASE}/universes/${universeId}/standard-datastores/datastore/entries/entry`
+  )
+  url.searchParams.set("datastoreName", datastoreName)
+  url.searchParams.set("scope", scope || "global")
+  url.searchParams.set("entryKey", key)
+
+  const res = await fetch(url.toString(), {
+    headers: { "x-api-key": apiKey },
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`DataStore get failed: ${res.status} ${text}`)
+  }
+  return res.json()
+}
+
+export async function setDatastoreEntry(
+  universeId: string,
+  datastoreName: string,
+  scope: string,
+  key: string,
+  data: unknown,
+  apiKey: string
+): Promise<void> {
+  const url = new URL(
+    `${ROBLOX_DATASTORE_BASE}/universes/${universeId}/standard-datastores/datastore/entries/entry`
+  )
+  url.searchParams.set("datastoreName", datastoreName)
+  url.searchParams.set("scope", scope || "global")
+  url.searchParams.set("entryKey", key)
+
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`DataStore set failed: ${res.status} ${text}`)
+  }
+}
+
+export async function listDatastores(
+  universeId: string,
+  apiKey: string,
+  cursor?: string
+): Promise<{ datastores: { name: string }[]; nextPageCursor: string | null }> {
+  const url = new URL(
+    `${ROBLOX_DATASTORE_BASE}/universes/${universeId}/standard-datastores`
+  )
+  url.searchParams.set("limit", "50")
+  if (cursor) url.searchParams.set("cursor", cursor)
+
+  const res = await fetch(url.toString(), {
+    headers: { "x-api-key": apiKey },
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`List datastores failed: ${res.status} ${text}`)
+  }
+  const json = await res.json()
+  return {
+    datastores: json.datastores ?? [],
+    nextPageCursor: json.nextPageCursor ?? null,
+  }
+}
+
+// ---------- User Lookup APIs ----------
+
+export async function getUserThumbnail(
+  userId: string
+): Promise<string | null> {
+  const res = await fetch(
+    `${ROBLOX_THUMBNAILS_BASE}/users/avatar-headshot?userIds=${userId}&size=150x150&format=Png&isCircular=false`
   )
   if (!res.ok) return null
   const data = await res.json()

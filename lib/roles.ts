@@ -5,33 +5,46 @@ export type Role = "owner" | "admin" | "moderator"
 export type Permission =
   | "view_stats"
   | "execute_kick"
+  | "execute_ban"
+  | "execute_warn"
   | "execute_announce"
   | "view_logs"
   | "view_own_logs"
   | "manage_roles"
   | "manage_api_key"
   | "manage_config"
+  | "manage_bans"
+  | "manage_datastores"
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   owner: [
     "view_stats",
     "execute_kick",
+    "execute_ban",
+    "execute_warn",
     "execute_announce",
     "view_logs",
     "view_own_logs",
     "manage_roles",
     "manage_api_key",
     "manage_config",
+    "manage_bans",
+    "manage_datastores",
   ],
   admin: [
     "view_stats",
     "execute_kick",
+    "execute_ban",
+    "execute_warn",
     "execute_announce",
     "view_logs",
     "view_own_logs",
+    "manage_bans",
   ],
   moderator: [
     "view_stats",
+    "execute_kick",
+    "execute_warn",
     "execute_announce",
     "view_own_logs",
   ],

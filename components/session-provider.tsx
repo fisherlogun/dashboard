@@ -16,6 +16,7 @@ interface User {
   avatarUrl: string
   role: "owner" | "admin" | "moderator"
   setupComplete: boolean
+  isGlobalAdmin: boolean
 }
 
 interface SessionContextType {
