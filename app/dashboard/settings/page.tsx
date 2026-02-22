@@ -161,11 +161,6 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Settings className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-semibold text-foreground">Settings</h2>
-      </div>
-
       <div className="grid gap-6">
         {/* API Key Management */}
         {isOwner && (
@@ -330,12 +325,17 @@ export default function SettingsPage() {
                 <tbody className="text-muted-foreground">
                   {[
                     { perm: "View Statistics", owner: true, admin: true, mod: true },
-                    { perm: "Kick Players", owner: true, admin: true, mod: false },
+                    { perm: "Kick Players", owner: true, admin: true, mod: true },
+                    { perm: "Ban Players", owner: true, admin: true, mod: false },
+                    { perm: "Warn Players", owner: true, admin: true, mod: true },
                     { perm: "Send Announcements", owner: true, admin: true, mod: true },
+                    { perm: "Manage Bans", owner: true, admin: true, mod: false },
+                    { perm: "Manage Datastores", owner: true, admin: false, mod: false },
                     { perm: "View All Logs", owner: true, admin: true, mod: false },
                     { perm: "View Own Logs", owner: true, admin: true, mod: true },
                     { perm: "Manage Roles", owner: true, admin: false, mod: false },
                     { perm: "Manage API Key", owner: true, admin: false, mod: false },
+                    { perm: "Manage Config", owner: true, admin: false, mod: false },
                   ].map((row) => (
                     <tr key={row.perm} className="border-b border-border/50">
                       <td className="py-2 text-foreground">{row.perm}</td>

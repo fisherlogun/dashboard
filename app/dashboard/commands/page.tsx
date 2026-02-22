@@ -30,10 +30,24 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Send, UserX, Megaphone, Terminal, Clock, CheckCircle2, XCircle } from "lucide-react"
+import {
+  Loader2,
+  Send,
+  UserX,
+  Megaphone,
+  Terminal,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  ShieldBan,
+  AlertTriangle,
+  Copy,
+} from "lucide-react"
 import { toast } from "sonner"
 import { useSession } from "@/components/session-provider"
 import { hasPermission, type Role } from "@/lib/roles"
+
+type CommandType = "kick" | "ban" | "warn" | "announce"
 
 interface CommandHistoryEntry {
   id: string
@@ -43,6 +57,17 @@ interface CommandHistoryEntry {
   status: "success" | "error"
 }
 
+const DURATION_OPTIONS = [
+  { value: "1h", label: "1 Hour" },
+  { value: "6h", label: "6 Hours" },
+  { value: "12h", label: "12 Hours" },
+  { value: "1d", label: "1 Day" },
+  { value: "3d", label: "3 Days" },
+  { value: "7d", label: "7 Days" },
+  { value: "30d", label: "30 Days" },
+  { value: "permanent", label: "Permanent" },
+]
+
 const LUAU_SCRIPT = `-- ServerScript: DashboardCommandHandler
 -- Place this in ServerScriptService
 
@@ -50,10 +75,13 @@ local MessagingService = game:GetService("MessagingService")
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 
--- Create a RemoteEvent for announcements
 local announceEvent = Instance.new("RemoteEvent")
 announceEvent.Name = "DashboardAnnouncement"
 announceEvent.Parent = game.ReplicatedStorage
+
+local warnEvent = Instance.new("RemoteEvent")
+warnEvent.Name = "DashboardWarning"
+warnEvent.Parent = game.ReplicatedStorage
 
 MessagingService:SubscribeAsync("DashboardCommands", function(message)
     local success, data = pcall(function()
@@ -69,13 +97,19 @@ MessagingService:SubscribeAsync("DashboardCommands", function(message)
         local player = Players:GetPlayerByUserId(tonumber(data.userId))
         if player then
             player:Kick("Removed by admin: " .. (data.reason or "No reason"))
-            print("[Dashboard] Kicked player:", data.userId)
-        else
-            warn("[Dashboard] Player not in server:", data.userId)
+        end
+    elseif data.type == "ban" then
+        local player = Players:GetPlayerByUserId(tonumber(data.userId))
+        if player then
+            player:Kick("Banned: " .. (data.reason or "No reason") .. " | Duration: " .. (data.duration or "permanent"))
+        end
+    elseif data.type == "warn" then
+        local player = Players:GetPlayerByUserId(tonumber(data.userId))
+        if player then
+            warnEvent:FireClient(player, data.reason, data.issuedBy)
         end
     elseif data.type == "announce" then
         announceEvent:FireAllClients(data.message, data.issuedBy)
-        print("[Dashboard] Announcement sent:", data.message)
     end
 end)
 
@@ -83,19 +117,28 @@ print("[Dashboard] Command handler initialized")`
 
 export default function CommandsPage() {
   const { user } = useSession()
-  const [commandType, setCommandType] = useState<"kick" | "announce">("kick")
+  const [commandType, setCommandType] = useState<CommandType>("kick")
   const [playerId, setPlayerId] = useState("")
   const [reason, setReason] = useState("")
   const [message, setMessage] = useState("")
+  const [duration, setDuration] = useState("1d")
   const [loading, setLoading] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [history, setHistory] = useState<CommandHistoryEntry[]>([])
   const [showScript, setShowScript] = useState(false)
 
   const canKick = user ? hasPermission(user.role as Role, "execute_kick") : false
-  const canAnnounce = user
-    ? hasPermission(user.role as Role, "execute_announce")
-    : false
+  const canBan = user ? hasPermission(user.role as Role, "execute_ban") : false
+  const canWarn = user ? hasPermission(user.role as Role, "execute_warn") : false
+  const canAnnounce = user ? hasPermission(user.role as Role, "execute_announce") : false
+
+  const isValid = () => {
+    if (commandType === "kick") return !!playerId && canKick
+    if (commandType === "ban") return !!playerId && canBan
+    if (commandType === "warn") return !!playerId && !!reason && canWarn
+    if (commandType === "announce") return !!message && canAnnounce
+    return false
+  }
 
   async function executeCommand() {
     setLoading(true)
@@ -103,7 +146,11 @@ export default function CommandsPage() {
       const payload =
         commandType === "kick"
           ? { type: "kick", userId: playerId, reason }
-          : { type: "announce", message }
+          : commandType === "ban"
+            ? { type: "ban", userId: playerId, reason, duration }
+            : commandType === "warn"
+              ? { type: "warn", userId: playerId, reason }
+              : { type: "announce", message }
 
       const res = await fetch("/api/commands", {
         method: "POST",
@@ -113,13 +160,19 @@ export default function CommandsPage() {
 
       const data = await res.json()
 
+      const detailStr =
+        commandType === "kick"
+          ? `Kick user ${playerId}: ${reason || "No reason"}`
+          : commandType === "ban"
+            ? `Ban user ${playerId} (${duration}): ${reason || "No reason"}`
+            : commandType === "warn"
+              ? `Warn user ${playerId}: ${reason}`
+              : `Announce: ${message}`
+
       const entry: CommandHistoryEntry = {
         id: crypto.randomUUID(),
         type: commandType,
-        details:
-          commandType === "kick"
-            ? `Kick user ${playerId}: ${reason || "No reason"}`
-            : `Announce: ${message}`,
+        details: detailStr,
         timestamp: new Date(),
         status: res.ok ? "success" : "error",
       }
@@ -127,13 +180,9 @@ export default function CommandsPage() {
 
       if (res.ok) {
         toast.success(data.message || "Command executed successfully")
-        // Clear fields
-        if (commandType === "kick") {
-          setPlayerId("")
-          setReason("")
-        } else {
-          setMessage("")
-        }
+        setPlayerId("")
+        setReason("")
+        setMessage("")
       } else {
         toast.error(data.error || "Command failed")
       }
@@ -145,76 +194,105 @@ export default function CommandsPage() {
     }
   }
 
+  const getConfirmMessage = () => {
+    switch (commandType) {
+      case "kick":
+        return `Are you sure you want to kick user ${playerId}?`
+      case "ban":
+        return `Are you sure you want to ban user ${playerId} for ${DURATION_OPTIONS.find(d => d.value === duration)?.label ?? duration}?`
+      case "warn":
+        return `Are you sure you want to warn user ${playerId}?`
+      case "announce":
+        return `Are you sure you want to broadcast this announcement to all players?`
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Terminal className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-semibold text-foreground">Command Console</h2>
+      {/* Command Type Tabs */}
+      <div className="flex flex-wrap items-center gap-2">
+        {[
+          { type: "kick" as const, icon: UserX, label: "Kick", perm: canKick },
+          { type: "ban" as const, icon: ShieldBan, label: "Ban", perm: canBan },
+          { type: "warn" as const, icon: AlertTriangle, label: "Warn", perm: canWarn },
+          { type: "announce" as const, icon: Megaphone, label: "Announce", perm: canAnnounce },
+        ].map((cmd) => (
+          <Button
+            key={cmd.type}
+            variant={commandType === cmd.type ? "default" : "outline"}
+            size="sm"
+            onClick={() => setCommandType(cmd.type)}
+            disabled={!cmd.perm}
+            className="gap-1.5"
+          >
+            <cmd.icon className="h-3.5 w-3.5" />
+            {cmd.label}
+          </Button>
+        ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-5">
         {/* Command Form */}
-        <Card className="border-border/50">
-          <CardHeader>
-            <CardTitle className="text-card-foreground">Execute Command</CardTitle>
+        <Card className="border-border/50 lg:col-span-3">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-card-foreground flex items-center gap-2 text-base">
+              <Terminal className="h-4 w-4 text-primary" />
+              Execute Command
+            </CardTitle>
             <CardDescription>
               Send commands to your Roblox experience via MessagingService.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-foreground">Command Type</Label>
-              <Select
-                value={commandType}
-                onValueChange={(v) => setCommandType(v as "kick" | "announce")}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="kick" disabled={!canKick}>
-                    <div className="flex items-center gap-2">
-                      <UserX className="h-4 w-4" />
-                      Kick Player
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="announce" disabled={!canAnnounce}>
-                    <div className="flex items-center gap-2">
-                      <Megaphone className="h-4 w-4" />
-                      Global Announcement
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {(commandType === "kick" || commandType === "ban" || commandType === "warn") && (
+              <div className="space-y-2">
+                <Label htmlFor="playerId" className="text-foreground text-sm">Player User ID</Label>
+                <Input
+                  id="playerId"
+                  placeholder="e.g. 123456789"
+                  value={playerId}
+                  onChange={(e) => setPlayerId(e.target.value)}
+                  className="font-mono"
+                />
+              </div>
+            )}
 
-            {commandType === "kick" && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="playerId" className="text-foreground">Player User ID</Label>
-                  <Input
-                    id="playerId"
-                    placeholder="Enter Roblox user ID..."
-                    value={playerId}
-                    onChange={(e) => setPlayerId(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="reason" className="text-foreground">Reason (optional)</Label>
-                  <Input
-                    id="reason"
-                    placeholder="Reason for kicking..."
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    maxLength={200}
-                  />
-                </div>
-              </>
+            {(commandType === "kick" || commandType === "ban" || commandType === "warn") && (
+              <div className="space-y-2">
+                <Label htmlFor="reason" className="text-foreground text-sm">
+                  Reason {commandType === "warn" ? "" : "(optional)"}
+                </Label>
+                <Input
+                  id="reason"
+                  placeholder={`Reason for ${commandType}...`}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  maxLength={200}
+                />
+              </div>
+            )}
+
+            {commandType === "ban" && (
+              <div className="space-y-2">
+                <Label className="text-foreground text-sm">Ban Duration</Label>
+                <Select value={duration} onValueChange={setDuration}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DURATION_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             )}
 
             {commandType === "announce" && (
               <div className="space-y-2">
-                <Label htmlFor="message" className="text-foreground">Announcement Message</Label>
+                <Label htmlFor="message" className="text-foreground text-sm">Message</Label>
                 <Textarea
                   id="message"
                   placeholder="Type your announcement..."
@@ -231,88 +309,83 @@ export default function CommandsPage() {
 
             <Button
               onClick={() => setConfirmOpen(true)}
-              disabled={
-                loading ||
-                (commandType === "kick" && (!playerId || !canKick)) ||
-                (commandType === "announce" && (!message || !canAnnounce))
-              }
+              disabled={loading || !isValid()}
               className="w-full gap-2"
             >
               <Send className="h-4 w-4" />
-              Execute Command
+              Execute
             </Button>
           </CardContent>
         </Card>
 
         {/* Command History */}
-        <Card className="border-border/50">
-          <CardHeader>
+        <Card className="border-border/50 lg:col-span-2">
+          <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-card-foreground">Recent Commands</CardTitle>
-                <CardDescription>History of commands sent this session.</CardDescription>
-              </div>
+              <CardTitle className="text-card-foreground text-base">History</CardTitle>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={() => setShowScript(!showScript)}
+                className="text-xs text-muted-foreground"
               >
-                {showScript ? "Hide Script" : "Luau Script"}
+                {showScript ? "Show History" : "Luau Script"}
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             {showScript ? (
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Paste this ServerScript into your Roblox experience to receive dashboard commands:
+                <p className="text-xs text-muted-foreground">
+                  Place this ServerScript in ServerScriptService to handle dashboard commands:
                 </p>
                 <div className="relative">
-                  <pre className="max-h-80 overflow-auto rounded-lg border border-border bg-muted/50 p-4 text-xs font-mono text-foreground">
+                  <pre className="max-h-72 overflow-auto rounded-lg border border-border bg-muted/50 p-3 text-[11px] font-mono leading-relaxed text-foreground">
                     {LUAU_SCRIPT}
                   </pre>
                   <Button
                     variant="secondary"
                     size="sm"
-                    className="absolute right-2 top-2"
+                    className="absolute right-2 top-2 h-7 gap-1 text-xs"
                     onClick={() => {
                       navigator.clipboard.writeText(LUAU_SCRIPT)
-                      toast.success("Script copied to clipboard")
+                      toast.success("Script copied")
                     }}
                   >
+                    <Copy className="h-3 w-3" />
                     Copy
                   </Button>
                 </div>
               </div>
             ) : history.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Clock className="mb-2 h-8 w-8 text-muted-foreground/50" />
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Clock className="mb-2 h-6 w-6 text-muted-foreground/40" />
                 <p className="text-sm text-muted-foreground">
                   No commands executed yet.
                 </p>
               </div>
             ) : (
-              <div className="space-y-2 max-h-80 overflow-auto">
+              <div className="space-y-1.5 max-h-80 overflow-auto">
                 {history.map((entry) => (
                   <div
                     key={entry.id}
-                    className="flex items-start gap-3 rounded-lg border border-border/50 p-3"
+                    className="flex items-start gap-2.5 rounded-md border border-border/50 p-2.5"
                   >
                     {entry.status === "success" ? (
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />
                     ) : (
-                      <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive-foreground" />
+                      <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive-foreground" />
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                           {entry.type}
                         </Badge>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-[10px] text-muted-foreground">
                           {entry.timestamp.toLocaleTimeString()}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm text-foreground truncate">
+                      <p className="mt-0.5 text-xs text-foreground truncate">
                         {entry.details}
                       </p>
                     </div>
@@ -330,9 +403,7 @@ export default function CommandsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Command</AlertDialogTitle>
             <AlertDialogDescription>
-              {commandType === "kick"
-                ? `Are you sure you want to kick user ${playerId}? This action will be logged.`
-                : `Are you sure you want to send this announcement to all players? This action will be logged.`}
+              {getConfirmMessage()} This action will be logged.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
