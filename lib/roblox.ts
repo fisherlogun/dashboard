@@ -1,4 +1,4 @@
-// Roblox API client for Open Cloud and legacy web APIs
+// Roblox API client for Open Cloud and legacy web APIsa
 
 const ROBLOX_OAUTH_BASE = "https://apis.roblox.com/oauth/v1"
 const ROBLOX_CLOUD_BASE = "https://apis.roblox.com/cloud/v2"
