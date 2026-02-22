@@ -1,4 +1,4 @@
-// Role-Based Access Control
+// Role-Based Access Controls
 
 export type Role = "owner" | "admin" | "moderator"
 
