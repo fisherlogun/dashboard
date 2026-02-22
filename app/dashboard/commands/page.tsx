@@ -46,6 +46,7 @@ import {
 import { toast } from "sonner"
 import { useSession } from "@/components/session-provider"
 import { hasPermission, type Role } from "@/lib/roles"
+import { DateTimePicker } from "@/components/date-time-picker"
 
 type CommandType = "kick" | "ban" | "warn" | "announce"
 
@@ -66,6 +67,7 @@ const DURATION_OPTIONS = [
   { value: "7d", label: "7 Days" },
   { value: "30d", label: "30 Days" },
   { value: "permanent", label: "Permanent" },
+  { value: "custom", label: "Custom Date/Time" },
 ]
 
 const LUAU_SCRIPT = `-- ServerScript: DashboardCommandHandler
@@ -98,11 +100,6 @@ MessagingService:SubscribeAsync("DashboardCommands", function(message)
         if player then
             player:Kick("Removed by admin: " .. (data.reason or "No reason"))
         end
-    elseif data.type == "ban" then
-        local player = Players:GetPlayerByUserId(tonumber(data.userId))
-        if player then
-            player:Kick("Banned: " .. (data.reason or "No reason") .. " | Duration: " .. (data.duration or "permanent"))
-        end
     elseif data.type == "warn" then
         local player = Players:GetPlayerByUserId(tonumber(data.userId))
         if player then
@@ -110,6 +107,12 @@ MessagingService:SubscribeAsync("DashboardCommands", function(message)
         end
     elseif data.type == "announce" then
         announceEvent:FireAllClients(data.message, data.issuedBy)
+    elseif data.type == "shutdown_server" then
+        if game.JobId == data.serverId then
+            for _, player in Players:GetPlayers() do
+                player:Kick("Server shutdown by admin")
+            end
+        end
     end
 end)
 
@@ -120,8 +123,10 @@ export default function CommandsPage() {
   const [commandType, setCommandType] = useState<CommandType>("kick")
   const [playerId, setPlayerId] = useState("")
   const [reason, setReason] = useState("")
+  const [privateReason, setPrivateReason] = useState("")
   const [message, setMessage] = useState("")
   const [duration, setDuration] = useState("1d")
+  const [customDate, setCustomDate] = useState<Date | undefined>(undefined)
   const [loading, setLoading] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [history, setHistory] = useState<CommandHistoryEntry[]>([])
@@ -134,7 +139,11 @@ export default function CommandsPage() {
 
   const isValid = () => {
     if (commandType === "kick") return !!playerId && canKick
-    if (commandType === "ban") return !!playerId && canBan
+    if (commandType === "ban") {
+      if (!playerId || !canBan) return false
+      if (duration === "custom" && !customDate) return false
+      return true
+    }
     if (commandType === "warn") return !!playerId && !!reason && canWarn
     if (commandType === "announce") return !!message && canAnnounce
     return false
@@ -143,48 +152,93 @@ export default function CommandsPage() {
   async function executeCommand() {
     setLoading(true)
     try {
-      const payload =
-        commandType === "kick"
-          ? { type: "kick", userId: playerId, reason }
-          : commandType === "ban"
-            ? { type: "ban", userId: playerId, reason, duration }
+      let detailStr = ""
+
+      if (commandType === "ban") {
+        // Use Roblox Ban API via /api/bans
+        const banRes = await fetch("/api/bans", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            robloxUserId: playerId,
+            robloxDisplayName: "Unknown",
+            reason,
+            privateReason,
+            duration,
+            ...(duration === "custom" && customDate ? { expiresAt: customDate.toISOString() } : {}),
+          }),
+        })
+        const banData = await banRes.json()
+
+        // Also kick via messaging service
+        await fetch("/api/commands", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "kick", userId: playerId, reason: `Banned: ${reason || "No reason"}` }),
+        })
+
+        detailStr = `Ban user ${playerId} (${duration}): ${reason || "No reason"}`
+
+        const entry: CommandHistoryEntry = {
+          id: crypto.randomUUID(),
+          type: "ban",
+          details: detailStr,
+          timestamp: new Date(),
+          status: banRes.ok ? "success" : "error",
+        }
+        setHistory((prev) => [entry, ...prev].slice(0, 20))
+
+        if (banRes.ok) {
+          toast.success(banData.message || "Ban applied via Roblox Ban API")
+          setPlayerId("")
+          setReason("")
+          setPrivateReason("")
+          setCustomDate(undefined)
+        } else {
+          toast.error(banData.error || "Ban failed")
+        }
+      } else {
+        const payload =
+          commandType === "kick"
+            ? { type: "kick", userId: playerId, reason }
             : commandType === "warn"
               ? { type: "warn", userId: playerId, reason }
               : { type: "announce", message }
 
-      const res = await fetch("/api/commands", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
+        const res = await fetch("/api/commands", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
 
-      const data = await res.json()
+        const data = await res.json()
 
-      const detailStr =
-        commandType === "kick"
-          ? `Kick user ${playerId}: ${reason || "No reason"}`
-          : commandType === "ban"
-            ? `Ban user ${playerId} (${duration}): ${reason || "No reason"}`
+        detailStr =
+          commandType === "kick"
+            ? `Kick user ${playerId}: ${reason || "No reason"}`
             : commandType === "warn"
               ? `Warn user ${playerId}: ${reason}`
               : `Announce: ${message}`
 
-      const entry: CommandHistoryEntry = {
-        id: crypto.randomUUID(),
-        type: commandType,
-        details: detailStr,
-        timestamp: new Date(),
-        status: res.ok ? "success" : "error",
-      }
-      setHistory((prev) => [entry, ...prev].slice(0, 20))
+        const entry: CommandHistoryEntry = {
+          id: crypto.randomUUID(),
+          type: commandType,
+          details: detailStr,
+          timestamp: new Date(),
+          status: res.ok ? "success" : "error",
+        }
+        setHistory((prev) => [entry, ...prev].slice(0, 20))
 
-      if (res.ok) {
-        toast.success(data.message || "Command executed successfully")
-        setPlayerId("")
-        setReason("")
-        setMessage("")
-      } else {
-        toast.error(data.error || "Command failed")
+        if (res.ok) {
+          toast.success(data.message || "Command executed successfully")
+          setPlayerId("")
+          setReason("")
+          setPrivateReason("")
+          setMessage("")
+          setCustomDate(undefined)
+        } else {
+          toast.error(data.error || "Command failed")
+        }
       }
     } catch {
       toast.error("Network error. Please try again.")
@@ -198,8 +252,12 @@ export default function CommandsPage() {
     switch (commandType) {
       case "kick":
         return `Are you sure you want to kick user ${playerId}?`
-      case "ban":
-        return `Are you sure you want to ban user ${playerId} for ${DURATION_OPTIONS.find(d => d.value === duration)?.label ?? duration}?`
+      case "ban": {
+        const durationLabel = duration === "custom" && customDate
+          ? `until ${customDate.toLocaleString()}`
+          : DURATION_OPTIONS.find((d) => d.value === duration)?.label ?? duration
+        return `Are you sure you want to ban user ${playerId} for ${durationLabel}? This will use Roblox's Ban API.`
+      }
       case "warn":
         return `Are you sure you want to warn user ${playerId}?`
       case "announce":
@@ -240,7 +298,9 @@ export default function CommandsPage() {
               Execute Command
             </CardTitle>
             <CardDescription>
-              Send commands to your Roblox experience via MessagingService.
+              {commandType === "ban"
+                ? "Ban players using Roblox's Ban API. The player will also be kicked from the current server."
+                : "Send commands to your Roblox experience via MessagingService."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -260,7 +320,7 @@ export default function CommandsPage() {
             {(commandType === "kick" || commandType === "ban" || commandType === "warn") && (
               <div className="space-y-2">
                 <Label htmlFor="reason" className="text-foreground text-sm">
-                  Reason {commandType === "warn" ? "" : "(optional)"}
+                  Reason (shown to player) {commandType === "warn" ? "" : "(optional)"}
                 </Label>
                 <Input
                   id="reason"
@@ -273,21 +333,46 @@ export default function CommandsPage() {
             )}
 
             {commandType === "ban" && (
-              <div className="space-y-2">
-                <Label className="text-foreground text-sm">Ban Duration</Label>
-                <Select value={duration} onValueChange={setDuration}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DURATION_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="privateReason" className="text-foreground text-sm">
+                    Private Reason (internal only, not visible to player)
+                  </Label>
+                  <Input
+                    id="privateReason"
+                    placeholder="Internal reason for this ban..."
+                    value={privateReason}
+                    onChange={(e) => setPrivateReason(e.target.value)}
+                    maxLength={200}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-foreground text-sm">Ban Duration</Label>
+                  <Select value={duration} onValueChange={setDuration}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DURATION_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {duration === "custom" && (
+                  <DateTimePicker
+                    date={customDate}
+                    onDateChange={setCustomDate}
+                    label="Ban Until"
+                    placeholder="Select ban end date and time"
+                    minDate={new Date()}
+                  />
+                )}
+              </>
             )}
 
             {commandType === "announce" && (
@@ -337,7 +422,7 @@ export default function CommandsPage() {
             {showScript ? (
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Place this ServerScript in ServerScriptService to handle dashboard commands:
+                  Place this ServerScript in ServerScriptService to handle dashboard commands (bans are handled via Roblox Ban API):
                 </p>
                 <div className="relative">
                   <pre className="max-h-72 overflow-auto rounded-lg border border-border bg-muted/50 p-3 text-[11px] font-mono leading-relaxed text-foreground">

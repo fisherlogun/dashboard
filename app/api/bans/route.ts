@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/roles"
 import { getBansCollection } from "@/lib/mongodb"
-import { addActionLog } from "@/lib/db"
+import { addActionLog, getConfig } from "@/lib/db"
+import { banPlayer, unbanPlayer } from "@/lib/roblox"
 import type { Role } from "@/lib/roles"
 
 export async function GET() {
@@ -39,27 +40,51 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { robloxUserId, robloxDisplayName, reason, duration } = body
+    const { robloxUserId, robloxDisplayName, reason, privateReason, duration, expiresAt: expiresAtStr } = body
 
     if (!robloxUserId || !reason || !duration) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Calculate expiration
+    const config = getConfig()
+
+    // Calculate expiration - support custom timestamp or preset durations
     let expiresAt: Date | null = null
-    if (duration !== "permanent") {
+    let durationSeconds: number | null = null
+
+    if (duration === "custom" && expiresAtStr) {
+      expiresAt = new Date(expiresAtStr)
+      durationSeconds = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000))
+    } else if (duration !== "permanent") {
       const units: Record<string, number> = {
-        "1h": 3600000,
-        "6h": 21600000,
-        "12h": 43200000,
-        "1d": 86400000,
-        "3d": 259200000,
-        "7d": 604800000,
-        "30d": 2592000000,
+        "1h": 3600,
+        "6h": 21600,
+        "12h": 43200,
+        "1d": 86400,
+        "3d": 259200,
+        "7d": 604800,
+        "30d": 2592000,
       }
-      const ms = units[duration]
-      if (ms) {
-        expiresAt = new Date(Date.now() + ms)
+      durationSeconds = units[duration] ?? null
+      if (durationSeconds) {
+        expiresAt = new Date(Date.now() + durationSeconds * 1000)
+      }
+    }
+
+    // Call Roblox Ban API
+    if (config) {
+      try {
+        await banPlayer(
+          config.universeId,
+          String(robloxUserId),
+          reason,
+          privateReason || reason,
+          durationSeconds,
+          config.apiKey
+        )
+      } catch (err) {
+        console.error("Roblox Ban API error:", err)
+        // Still save to local DB even if Roblox API fails
       }
     }
 
@@ -73,7 +98,9 @@ export async function POST(req: NextRequest) {
           bannedBy: session.userId,
           bannedByName: session.displayName,
           reason,
+          privateReason: privateReason || "",
           duration,
+          durationSeconds,
           expiresAt,
           createdAt: new Date(),
           active: true,
@@ -113,6 +140,17 @@ export async function DELETE(req: NextRequest) {
     const robloxUserId = searchParams.get("userId")
     if (!robloxUserId) {
       return NextResponse.json({ error: "userId required" }, { status: 400 })
+    }
+
+    const config = getConfig()
+
+    // Call Roblox Unban API
+    if (config) {
+      try {
+        await unbanPlayer(config.universeId, robloxUserId, config.apiKey)
+      } catch (err) {
+        console.error("Roblox Unban API error:", err)
+      }
     }
 
     const collection = await getBansCollection()

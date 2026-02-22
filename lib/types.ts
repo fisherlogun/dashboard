@@ -15,7 +15,9 @@ export interface Ban {
   bannedBy: string
   bannedByName: string
   reason: string
+  privateReason: string
   duration: string // e.g. "1h", "6h", "12h", "1d", "3d", "7d", "30d", "permanent"
+  durationSeconds: number | null // null = permanent
   expiresAt: Date | null // null = permanent
   createdAt: Date
   active: boolean
