@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,12 +14,21 @@ import {
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Database,
   Search,
   Save,
   Loader2,
   RefreshCw,
   ChevronRight,
+  Key,
+  List,
 } from "lucide-react"
 import { toast } from "sonner"
 import useSWR from "swr"
@@ -35,12 +44,48 @@ export default function DatastoresPage() {
   const [saving, setSaving] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
 
+  // Key listing state
+  const [keys, setKeys] = useState<string[]>([])
+  const [loadingKeys, setLoadingKeys] = useState(false)
+  const [keysLoaded, setKeysLoaded] = useState(false)
+
   const { data: storesData, isLoading: storesLoading, mutate: refreshStores } = useSWR(
     "/api/datastores?action=list",
     fetcher
   )
 
   const datastores: { name: string }[] = storesData?.datastores ?? []
+
+  // Fetch keys when store or scope changes
+  const fetchKeys = useCallback(async () => {
+    if (!selectedStore) return
+    setLoadingKeys(true)
+    setKeysLoaded(false)
+    try {
+      const res = await fetch(
+        `/api/datastores?action=keys&name=${encodeURIComponent(selectedStore)}&scope=${encodeURIComponent(scope)}`
+      )
+      const json = await res.json()
+      if (res.ok) {
+        setKeys((json.keys ?? []).map((k: { key: string }) => k.key))
+        setKeysLoaded(true)
+      } else {
+        setKeys([])
+        toast.error(json.error || "Failed to fetch keys")
+      }
+    } catch {
+      setKeys([])
+      toast.error("Network error fetching keys")
+    } finally {
+      setLoadingKeys(false)
+    }
+  }, [selectedStore, scope])
+
+  useEffect(() => {
+    if (selectedStore) {
+      fetchKeys()
+    }
+  }, [selectedStore, scope, fetchKeys])
 
   const lookupEntry = useCallback(async () => {
     if (!selectedStore || !key) return
@@ -144,6 +189,7 @@ export default function DatastoresPage() {
                       setSelectedStore(ds.name)
                       setEntryData("")
                       setHasLoaded(false)
+                      setKey("")
                     }}
                     className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors ${
                       selectedStore === ds.name
@@ -195,15 +241,86 @@ export default function DatastoresPage() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-foreground">Entry Key</Label>
+                {keysLoaded && keys.length > 0 ? (
+                  <Select
+                    value={key}
+                    onValueChange={(v) => {
+                      if (v === "__custom__") {
+                        setKey("")
+                      } else {
+                        setKey(v)
+                      }
+                    }}
+                    disabled={!selectedStore}
+                  >
+                    <SelectTrigger className="font-mono text-sm">
+                      <SelectValue placeholder="Select a key..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {keys.map((k) => (
+                        <SelectItem key={k} value={k}>
+                          <span className="font-mono text-xs">{k}</span>
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__custom__">
+                        <span className="text-xs text-muted-foreground">Enter custom key...</span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={key}
+                    onChange={(e) => setKey(e.target.value)}
+                    placeholder="Player_123456789"
+                    className="font-mono text-sm"
+                    disabled={!selectedStore}
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Manual key input when "custom" is selected */}
+            {keysLoaded && keys.length > 0 && key === "" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-foreground">Custom Key</Label>
                 <Input
                   value={key}
                   onChange={(e) => setKey(e.target.value)}
-                  placeholder="Player_123456789"
+                  placeholder="Enter a custom key..."
                   className="font-mono text-sm"
-                  disabled={!selectedStore}
                 />
               </div>
-            </div>
+            )}
+
+            {/* Keys info */}
+            {selectedStore && (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Key className="h-3 w-3" />
+                  {loadingKeys ? (
+                    "Loading keys..."
+                  ) : keysLoaded ? (
+                    `${keys.length} key${keys.length !== 1 ? "s" : ""} in scope "${scope}"`
+                  ) : (
+                    "Keys not loaded"
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={fetchKeys}
+                  disabled={loadingKeys}
+                  className="h-6 gap-1 text-xs px-2"
+                >
+                  {loadingKeys ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <List className="h-3 w-3" />
+                  )}
+                  Refresh Keys
+                </Button>
+              </div>
+            )}
 
             <Button
               variant="outline"

@@ -2,6 +2,8 @@
 
 const ROBLOX_OAUTH_BASE = "https://apis.roblox.com/oauth/v1"
 const ROBLOX_CLOUD_BASE = "https://apis.roblox.com/cloud/v2"
+const ROBLOX_MESSAGING_BASE = "https://apis.roblox.com/messaging-service/v1"
+const ROBLOX_BAN_BASE = "https://apis.roblox.com/cloud/v2"
 const ROBLOX_GAMES_BASE = "https://games.roblox.com/v1"
 const ROBLOX_THUMBNAILS_BASE = "https://thumbnails.roblox.com/v1"
 const ROBLOX_DATASTORE_BASE = "https://apis.roblox.com/datastores/v1"
@@ -116,7 +118,7 @@ export async function publishMessage(
   apiKey: string
 ): Promise<void> {
   const res = await fetch(
-    `${ROBLOX_CLOUD_BASE}/universes/${universeId}/topics/${topic}:publish`,
+    `${ROBLOX_MESSAGING_BASE}/universes/${universeId}/topics/${topic}`,
     {
       method: "POST",
       headers: {
@@ -303,6 +305,103 @@ export async function listDatastores(
   return {
     datastores: json.datastores ?? [],
     nextPageCursor: json.nextPageCursor ?? null,
+  }
+}
+
+export async function listDatastoreKeys(
+  universeId: string,
+  datastoreName: string,
+  scope: string,
+  apiKey: string,
+  cursor?: string
+): Promise<{ keys: { key: string }[]; nextPageCursor: string | null }> {
+  const url = new URL(
+    `${ROBLOX_DATASTORE_BASE}/universes/${universeId}/standard-datastores/datastore/entries`
+  )
+  url.searchParams.set("datastoreName", datastoreName)
+  url.searchParams.set("scope", scope || "global")
+  url.searchParams.set("limit", "100")
+  if (cursor) url.searchParams.set("cursor", cursor)
+
+  const res = await fetch(url.toString(), {
+    headers: { "x-api-key": apiKey },
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`List datastore keys failed: ${res.status} ${text}`)
+  }
+  const json = await res.json()
+  return {
+    keys: json.keys ?? [],
+    nextPageCursor: json.nextPageCursor ?? null,
+  }
+}
+
+// ---------- Roblox Ban API (v2 Cloud) ----------
+
+export async function banPlayer(
+  universeId: string,
+  userId: string,
+  displayReason: string,
+  privateReason: string,
+  durationSeconds: number | null,
+  apiKey: string
+): Promise<void> {
+  const body: Record<string, unknown> = {
+    gameJoinRestriction: {
+      active: true,
+      displayReason,
+      privateReason,
+      excludeAltAccounts: false,
+      inherited: true,
+    },
+  }
+  if (durationSeconds !== null) {
+    (body.gameJoinRestriction as Record<string, unknown>).duration = `${durationSeconds}s`
+  }
+
+  const res = await fetch(
+    `${ROBLOX_BAN_BASE}/universes/${universeId}/user-restrictions/${userId}`,
+    {
+      method: "PATCH",
+      headers: {
+        "x-api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  )
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Ban API failed: ${res.status} ${text}`)
+  }
+}
+
+export async function unbanPlayer(
+  universeId: string,
+  userId: string,
+  apiKey: string
+): Promise<void> {
+  const body = {
+    gameJoinRestriction: {
+      active: false,
+    },
+  }
+
+  const res = await fetch(
+    `${ROBLOX_BAN_BASE}/universes/${universeId}/user-restrictions/${userId}`,
+    {
+      method: "PATCH",
+      headers: {
+        "x-api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  )
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Unban API failed: ${res.status} ${text}`)
   }
 }
 

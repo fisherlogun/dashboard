@@ -4,6 +4,7 @@ import { getConfig } from "@/lib/db"
 import { hasPermission } from "@/lib/roles"
 import {
   listDatastores,
+  listDatastoreKeys,
   getDatastoreEntry,
   setDatastoreEntry,
 } from "@/lib/roblox"
@@ -31,6 +32,28 @@ export async function GET(request: NextRequest) {
     if (action === "list") {
       const cursor = searchParams.get("cursor") ?? undefined
       const result = await listDatastores(config.universeId, config.apiKey, cursor)
+      return NextResponse.json(result)
+    }
+
+    if (action === "keys") {
+      const name = searchParams.get("name")
+      const scope = searchParams.get("scope") ?? "global"
+      const cursor = searchParams.get("cursor") ?? undefined
+
+      if (!name) {
+        return NextResponse.json(
+          { error: "name is required" },
+          { status: 400 }
+        )
+      }
+
+      const result = await listDatastoreKeys(
+        config.universeId,
+        name,
+        scope,
+        config.apiKey,
+        cursor
+      )
       return NextResponse.json(result)
     }
 

@@ -123,7 +123,7 @@ export default function AdminPage() {
         </div>
         <div>
           <h1 className="text-xl font-semibold text-foreground">Global Admin</h1>
-          <p className="text-sm text-muted-foreground">Manage dashboard licenses across all users</p>
+          <p className="text-sm text-muted-foreground">Manage dashboard access. Only licensed Roblox users can sign in.</p>
         </div>
       </div>
 
@@ -157,7 +157,7 @@ export default function AdminPage() {
             Grant License
           </CardTitle>
           <CardDescription>
-            Add a new licensed user by their Roblox User ID and display name.
+            Add a Roblox user who can sign in to the dashboard via Roblox OAuth. You are automatically whitelisted as the global admin.
           </CardDescription>
         </CardHeader>
         <CardContent>
