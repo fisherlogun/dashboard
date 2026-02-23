@@ -5,17 +5,15 @@ import { useSession } from "@/components/session-provider"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { KeyRound, Plus, Trash2, Search, Shield } from "lucide-react"
+import { KeyRound, Plus, Trash2, Search, Shield, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 interface License {
-  robloxUserId: string
-  robloxDisplayName: string
-  grantedBy: string
-  grantedByName: string
-  grantedAt: string
+  user_id: string
+  display_name?: string
+  granted_by_name: string
+  granted_at: string
   active: boolean
 }
 
@@ -25,241 +23,114 @@ export default function AdminPage() {
   const [licenses, setLicenses] = useState<License[]>([])
   const [fetching, setFetching] = useState(true)
   const [userId, setUserId] = useState("")
-  const [displayName, setDisplayName] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [search, setSearch] = useState("")
 
   const fetchLicenses = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/licenses")
-      const data = await res.json()
-      if (res.ok) {
-        setLicenses(data.licenses ?? [])
-      } else {
-        toast.error(data.error || "Failed to fetch licenses")
-      }
-    } catch (err) {
-      console.error("License fetch error:", err)
-      toast.error("Failed to connect to license database. Check MONGODB_URI in Vars.")
-    } finally {
-      setFetching(false)
-    }
+      if (res.ok) { const d = await res.json(); setLicenses(d.licenses ?? []) }
+    } catch { toast.error("Failed to fetch licenses") } finally { setFetching(false) }
   }, [])
 
   useEffect(() => {
     if (!loading && user) {
-      if (!user.isGlobalAdmin) {
-        router.push("/dashboard")
-        return
-      }
+      if (!user.isGlobalAdmin) { router.push("/dashboard"); return }
       fetchLicenses()
     }
   }, [loading, user, router, fetchLicenses])
 
   const handleGrant = async () => {
-    if (!userId.trim() || !displayName.trim()) {
-      toast.error("Both User ID and Display Name are required")
-      return
-    }
+    if (!userId.trim()) { toast.error("User ID required"); return }
     setSubmitting(true)
     try {
       const res = await fetch("/api/admin/licenses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          robloxUserId: userId.trim(),
-          robloxDisplayName: displayName.trim(),
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ robloxUserId: userId.trim() }),
       })
-      if (res.ok) {
-        toast.success(`License granted to ${displayName.trim()}`)
-        setUserId("")
-        setDisplayName("")
-        fetchLicenses()
-      } else {
-        const data = await res.json()
-        toast.error(data.error || "Failed to grant license")
-      }
-    } catch {
-      toast.error("Failed to grant license")
-    } finally {
-      setSubmitting(false)
-    }
+      if (res.ok) { toast.success("License granted"); setUserId(""); fetchLicenses() }
+      else { const d = await res.json(); toast.error(d.error || "Failed") }
+    } catch { toast.error("Network error") } finally { setSubmitting(false) }
   }
 
-  const handleRevoke = async (robloxUserId: string, name: string) => {
+  const handleRevoke = async (uid: string) => {
     try {
-      const res = await fetch(`/api/admin/licenses?userId=${robloxUserId}`, {
-        method: "DELETE",
-      })
-      if (res.ok) {
-        toast.success(`License revoked from ${name}`)
-        fetchLicenses()
-      }
-    } catch {
-      toast.error("Failed to revoke license")
-    }
+      const res = await fetch(`/api/admin/licenses?userId=${uid}`, { method: "DELETE" })
+      if (res.ok) { toast.success("Revoked"); fetchLicenses() }
+    } catch { toast.error("Failed") }
   }
 
   if (loading || !user?.isGlobalAdmin) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    )
+    return <div className="flex items-center justify-center py-20"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>
   }
 
-  const filtered = licenses.filter(
-    (l) =>
-      l.robloxDisplayName.toLowerCase().includes(search.toLowerCase()) ||
-      l.robloxUserId.includes(search)
-  )
-
-  const activeLicenses = licenses.filter((l) => l.active)
+  const active = licenses.filter((l) => l.active)
+  const filtered = licenses.filter((l) => l.user_id.includes(search) || l.display_name?.toLowerCase().includes(search.toLowerCase()))
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15">
-          <Shield className="h-5 w-5 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Global Admin</h1>
-          <p className="text-sm text-muted-foreground">Manage dashboard access. Only licensed Roblox users can sign in.</p>
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Shield className="h-4 w-4 text-primary" />
+        <h1 className="text-sm font-mono font-bold text-foreground uppercase tracking-wider">Global Admin</h1>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { label: "ACTIVE", val: active.length },
+          { label: "TOTAL", val: licenses.length },
+          { label: "REVOKED", val: licenses.length - active.length },
+        ].map((s) => (
+          <div key={s.label} className="border border-border bg-card p-3 text-center">
+            <div className="text-lg font-mono font-bold text-foreground">{s.val}</div>
+            <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="border border-border bg-card p-4 space-y-3">
+        <h2 className="text-xs font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-1.5"><Plus className="h-3 w-3" /> Grant License</h2>
+        <p className="text-[10px] font-mono text-muted-foreground">Licensed Roblox users can sign in via OAuth and create projects.</p>
+        <div className="flex gap-2">
+          <Input placeholder="Roblox User ID" value={userId} onChange={(e) => setUserId(e.target.value)} className="font-mono text-xs h-8 flex-1" />
+          <Button size="sm" className="gap-1 font-mono text-xs uppercase h-8" onClick={handleGrant} disabled={submitting || !userId.trim()}>
+            {submitting ? <Loader2 className="h-3 w-3 animate-spin" /> : <KeyRound className="h-3 w-3" />} Grant
+          </Button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-foreground">{activeLicenses.length}</div>
-            <p className="text-xs text-muted-foreground">Active Licenses</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-foreground">{licenses.length}</div>
-            <p className="text-xs text-muted-foreground">Total Licenses</p>
-          </CardContent>
-        </Card>
-        <Card className="col-span-2 sm:col-span-1">
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-foreground">{licenses.filter((l) => !l.active).length}</div>
-            <p className="text-xs text-muted-foreground">Revoked</p>
-          </CardContent>
-        </Card>
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <Input placeholder="Search licenses..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 font-mono text-xs h-8" />
       </div>
 
-      {/* Grant License */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Plus className="h-4 w-4 text-primary" />
-            Grant License
-          </CardTitle>
-          <CardDescription>
-            Add a Roblox user who can sign in to the dashboard via Roblox OAuth. You are automatically whitelisted as the global admin.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Input
-              placeholder="Roblox User ID"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              className="font-mono sm:max-w-48"
-            />
-            <Input
-              placeholder="Display Name"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              className="sm:max-w-64"
-            />
-            <Button
-              onClick={handleGrant}
-              disabled={submitting || !userId.trim() || !displayName.trim()}
-              className="gap-2"
-            >
-              <KeyRound className="h-3.5 w-3.5" />
-              {submitting ? "Granting..." : "Grant"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* License List */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Licensed Users</CardTitle>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-8 pl-9 text-sm w-52"
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {fetching ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-14 animate-pulse rounded-lg bg-muted" />
-              ))}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
-              {search ? "No licenses match your search." : "No licenses granted yet."}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filtered.map((license) => (
-                <div
-                  key={license.robloxUserId}
-                  className="flex items-center justify-between rounded-lg border border-border bg-background p-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-xs font-bold text-primary">
-                      {license.robloxDisplayName[0]?.toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-foreground">
-                          {license.robloxDisplayName}
-                        </span>
-                        <Badge variant={license.active ? "default" : "secondary"} className="text-[10px] px-1.5 py-0">
-                          {license.active ? "Active" : "Revoked"}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className="font-mono">{license.robloxUserId}</span>
-                        <span>{"by " + license.grantedByName}</span>
-                        <span>{new Date(license.grantedAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                  {license.active && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 text-destructive-foreground hover:text-destructive-foreground hover:bg-destructive/10"
-                      onClick={() => handleRevoke(license.robloxUserId, license.robloxDisplayName)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      <span className="sr-only">Revoke license</span>
-                    </Button>
-                  )}
+      {fetching ? (
+        <div className="flex items-center justify-center h-32"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>
+      ) : filtered.length === 0 ? (
+        <p className="text-xs font-mono text-muted-foreground text-center py-8">{search ? "NO_MATCHES" : "NO_LICENSES"}</p>
+      ) : (
+        <div className="space-y-1">
+          {filtered.map((l) => (
+            <div key={l.user_id} className="border border-border bg-card p-3 flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono font-bold text-foreground">{l.display_name || l.user_id}</span>
+                  <Badge variant={l.active ? "default" : "secondary"} className="text-[10px] font-mono h-4">{l.active ? "ACTIVE" : "REVOKED"}</Badge>
                 </div>
-              ))}
+                <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground mt-0.5">
+                  <span>ID: {l.user_id}</span>
+                  <span>by {l.granted_by_name}</span>
+                  <span>{new Date(l.granted_at).toLocaleDateString()}</span>
+                </div>
+              </div>
+              {l.active && (
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRevoke(l.user_id)}>
+                  <Trash2 className="h-3 w-3 text-destructive" />
+                </Button>
+              )}
             </div>
-          )}
-        </CardContent>
-      </Card>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

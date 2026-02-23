@@ -1,53 +1,27 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { getActionLogs } from "@/lib/db"
+import { getProjectMember, getActionLogs } from "@/lib/db"
 import { hasPermission } from "@/lib/roles"
 
-export async function GET(request: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const canViewAll = hasPermission(session.role, "view_logs")
-    const canViewOwn = hasPermission(session.role, "view_own_logs")
+    const projectId = req.nextUrl.searchParams.get("projectId")
+    if (!projectId) return NextResponse.json({ error: "projectId required" }, { status: 400 })
 
-    if (!canViewAll && !canViewOwn) {
-      return NextResponse.json(
-        { error: "Insufficient permissions" },
-        { status: 403 }
-      )
-    }
+    const member = await getProjectMember(projectId, session.userId)
+    if (!member) return NextResponse.json({ error: "Not a member" }, { status: 403 })
 
-    const { searchParams } = new URL(request.url)
-    const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 100)
-    const offset = parseInt(searchParams.get("offset") || "0")
-    const action = searchParams.get("action") || undefined
-    const status = searchParams.get("status") as "success" | "error" | undefined
+    const role = member.role as "owner" | "admin" | "moderator"
+    const canViewAll = hasPermission(role, "view_logs")
 
-    const result = getActionLogs({
-      limit,
-      offset,
-      action,
-      status,
-      userId: canViewAll ? undefined : session.userId,
-    })
+    const logs = await getActionLogs(projectId, canViewAll ? undefined : session.userId)
 
-    return NextResponse.json({
-      logs: result.logs.map((log) => ({
-        ...log,
-        timestamp: log.timestamp.toISOString(),
-      })),
-      total: result.total,
-      limit,
-      offset,
-    })
+    return NextResponse.json({ logs })
   } catch (error) {
     console.error("Logs error:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to fetch logs" }, { status: 500 })
   }
 }

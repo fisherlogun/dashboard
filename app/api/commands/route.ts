@@ -1,159 +1,78 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { getConfig, addActionLog } from "@/lib/db"
+import { getProjectById, getProjectMember, addActionLog } from "@/lib/db"
 import { publishMessage } from "@/lib/roblox"
 import { hasPermission } from "@/lib/roles"
-import { rateLimit } from "@/lib/rate-limit"
-import { z } from "zod"
 
-const commandSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("kick"),
-    userId: z.string().min(1, "Player user ID is required"),
-    reason: z.string().max(200).optional().default("No reason provided"),
-  }),
-  z.object({
-    type: z.literal("warn"),
-    userId: z.string().min(1, "Player user ID is required"),
-    reason: z.string().min(1, "Reason is required").max(200),
-  }),
-  z.object({
-    type: z.literal("announce"),
-    message: z.string().min(1, "Message is required").max(500),
-    serverId: z.string().optional(),
-  }),
-])
-
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
     const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const body = await req.json()
+    const { projectId, type, userId, reason, message, serverId, privateReason, duration, durationSeconds, expiresAt } = body
+
+    if (!projectId) return NextResponse.json({ error: "projectId required" }, { status: 400 })
+
+    const project = await getProjectById(projectId)
+    if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
+
+    const member = await getProjectMember(projectId, session.userId)
+    if (!member) return NextResponse.json({ error: "Not a member" }, { status: 403 })
+
+    const role = member.role as "owner" | "admin" | "moderator"
+
+    if (type === "kick" && !hasPermission(role, "execute_kick")) {
+      return NextResponse.json({ error: "No permission to kick" }, { status: 403 })
+    }
+    if (type === "ban" && !hasPermission(role, "execute_ban")) {
+      return NextResponse.json({ error: "No permission to ban" }, { status: 403 })
+    }
+    if (type === "warn" && !hasPermission(role, "execute_warn")) {
+      return NextResponse.json({ error: "No permission to warn" }, { status: 403 })
+    }
+    if (type === "announce" && !hasPermission(role, "execute_announce")) {
+      return NextResponse.json({ error: "No permission to announce" }, { status: 403 })
     }
 
-    // Rate limit: 5 commands per minute
-    const { allowed, remaining } = rateLimit(
-      `cmd:${session.userId}`,
-      5,
-      60000
-    )
-    if (!allowed) {
-      return NextResponse.json(
-        { error: "Rate limited. Max 5 commands per minute." },
-        { status: 429 }
-      )
-    }
-
-    const config = getConfig()
-    if (!config) {
-      return NextResponse.json(
-        { error: "Setup not complete" },
-        { status: 400 }
-      )
-    }
-
-    const body = await request.json()
-    const parsed = commandSchema.safeParse(body)
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid command", details: parsed.error.flatten() },
-        { status: 400 }
-      )
-    }
-
-    const command = parsed.data
-    const ip = request.headers.get("x-forwarded-for") || "unknown"
-
-    // Check RBAC permissions
-    if (command.type === "kick" && !hasPermission(session.role, "execute_kick")) {
-      addActionLog({
-        userId: session.userId,
-        userName: session.displayName,
-        action: `command:${command.type}`,
-        details: `Denied: insufficient permissions`,
-        ip,
-        status: "error",
-      })
-      return NextResponse.json(
-        { error: "You do not have permission to kick players" },
-        { status: 403 }
-      )
-    }
-
-    if (
-      command.type === "announce" &&
-      !hasPermission(session.role, "execute_announce")
-    ) {
-      return NextResponse.json(
-        { error: "You do not have permission to send announcements" },
-        { status: 403 }
-      )
-    }
-
-    if (command.type === "warn" && !hasPermission(session.role, "execute_warn")) {
-      return NextResponse.json(
-        { error: "You do not have permission to warn players" },
-        { status: 403 }
-      )
-    }
-
-    // Build the message payload
-    const payload = JSON.stringify({
-      ...command,
+    const payload: Record<string, unknown> = {
+      type,
       issuedBy: session.displayName,
       issuedAt: new Date().toISOString(),
-    })
-
-    // Publish to Roblox MessagingService
-    try {
-      await publishMessage(
-        config.universeId,
-        "DashboardCommands",
-        payload,
-        config.apiKey
-      )
-
-      const details =
-        command.type === "kick"
-          ? `Kicked user ${command.userId}: ${command.reason}`
-          : command.type === "warn"
-            ? `Warned user ${command.userId}: ${command.reason}`
-            : `Announcement: ${command.message}`
-
-      addActionLog({
-        userId: session.userId,
-        userName: session.displayName,
-        action: `command:${command.type}`,
-        details,
-        ip,
-        status: "success",
-      })
-
-      return NextResponse.json({
-        success: true,
-        remaining,
-        message: `Command executed: ${command.type}`,
-      })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error"
-      addActionLog({
-        userId: session.userId,
-        userName: session.displayName,
-        action: `command:${command.type}`,
-        details: `Failed: ${message}`,
-        ip,
-        status: "error",
-      })
-      return NextResponse.json(
-        { error: `Command failed: ${message}` },
-        { status: 500 }
-      )
     }
+
+    if (type === "kick") {
+      payload.userId = userId
+      payload.reason = reason || "No reason provided"
+    } else if (type === "ban") {
+      payload.userId = userId
+      payload.reason = reason || "No reason provided"
+      payload.privateReason = privateReason || reason || ""
+      payload.duration = duration
+      payload.durationSeconds = durationSeconds ?? null
+      payload.expiresAt = expiresAt ?? null
+    } else if (type === "warn") {
+      payload.userId = userId
+      payload.reason = reason
+    } else if (type === "announce") {
+      payload.message = message
+      if (serverId) payload.serverId = serverId
+    } else {
+      return NextResponse.json({ error: "Invalid command type" }, { status: 400 })
+    }
+
+    await publishMessage(project.universe_id, "DashboardCommands", JSON.stringify(payload), project.api_key)
+
+    const details = type === "kick" ? `Kicked ${userId}: ${reason}`
+      : type === "ban" ? `Banned ${userId} (${duration}): ${reason}`
+      : type === "warn" ? `Warned ${userId}: ${reason}`
+      : `Announce: ${message}`
+
+    await addActionLog(projectId, session.userId, session.displayName, type, details)
+
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Command error:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Command failed" }, { status: 500 })
   }
 }

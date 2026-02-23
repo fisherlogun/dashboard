@@ -36,7 +36,6 @@ export async function POST(req: NextRequest) {
     const project = await getProject(projectId)
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
 
-    // Calculate expiration
     let expiresAt: Date | null = null
     let durationSeconds: number | null = null
     if (duration !== "permanent") {
@@ -45,42 +44,28 @@ export async function POST(req: NextRequest) {
         "3d": 259200, "7d": 604800, "30d": 2592000,
       }
       durationSeconds = units[duration] ?? null
-      if (durationSeconds) expiresAt = new Date(Date.now() + durationSeconds * 1000)
+      if (body.durationSeconds) durationSeconds = body.durationSeconds
+      if (body.expiresAt) expiresAt = new Date(body.expiresAt)
+      else if (durationSeconds) expiresAt = new Date(Date.now() + durationSeconds * 1000)
     }
 
-    // Send to game via MessagingService
     try {
       const payload = JSON.stringify({
-        type: "ban",
-        userId: String(robloxUserId),
-        reason,
-        privateReason: privateReason || reason,
-        duration,
-        durationSeconds,
+        type: "ban", userId: String(robloxUserId), reason,
+        privateReason: privateReason || reason, duration, durationSeconds,
         expiresAt: expiresAt?.toISOString() ?? null,
-        issuedBy: session.displayName,
-        issuedAt: new Date().toISOString(),
+        issuedBy: session.displayName, issuedAt: new Date().toISOString(),
       })
       await publishMessage(project.universe_id, "DashboardCommands", payload, project.api_key)
-    } catch (err) {
-      console.error("MessagingService ban error:", err)
-    }
+    } catch (err) { console.error("MessagingService ban error:", err) }
 
     await createBan({
-      projectId,
-      robloxUserId: String(robloxUserId),
-      bannedBy: session.userId,
-      bannedByName: session.displayName,
-      reason,
-      privateReason: privateReason || "",
-      duration,
-      durationSeconds,
-      expiresAt,
+      projectId, robloxUserId: String(robloxUserId),
+      bannedBy: session.userId, bannedByName: session.displayName,
+      reason, privateReason: privateReason || "", duration, durationSeconds, expiresAt,
     })
 
-    const ip = req.headers.get("x-forwarded-for") || "unknown"
-    await addActionLog({ projectId, userId: session.userId, userName: session.displayName, action: "ban", details: `Banned ${robloxUserId}: ${reason}`, ip, status: "success" })
-
+    await addActionLog(projectId, session.userId, session.displayName, "ban", `Banned ${robloxUserId}: ${reason}`)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Ban error:", error)
@@ -93,10 +78,20 @@ export async function DELETE(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   try {
-    const { searchParams } = new URL(req.url)
-    const banId = searchParams.get("banId")
-    const projectId = searchParams.get("projectId")
-    const robloxUserId = searchParams.get("userId")
+    let banId: string | null = null
+    let projectId: string | null = null
+    let robloxUserId: string | null = null
+
+    // Support both body and query params
+    const contentType = req.headers.get("content-type")
+    if (contentType?.includes("application/json")) {
+      const body = await req.json()
+      banId = body.banId; projectId = body.projectId; robloxUserId = body.robloxUserId
+    }
+    if (!banId) banId = req.nextUrl.searchParams.get("banId")
+    if (!projectId) projectId = req.nextUrl.searchParams.get("projectId")
+    if (!robloxUserId) robloxUserId = req.nextUrl.searchParams.get("userId")
+
     if (!banId || !projectId) return NextResponse.json({ error: "banId and projectId required" }, { status: 400 })
 
     const role = await getMemberRole(projectId, session.userId)
@@ -107,16 +102,11 @@ export async function DELETE(req: NextRequest) {
       try {
         const payload = JSON.stringify({ type: "unban", userId: robloxUserId, issuedBy: session.displayName, issuedAt: new Date().toISOString() })
         await publishMessage(project.universe_id, "DashboardCommands", payload, project.api_key)
-      } catch (err) {
-        console.error("MessagingService unban error:", err)
-      }
+      } catch (err) { console.error("MessagingService unban error:", err) }
     }
 
     await unbanUser(banId)
-
-    const ip = req.headers.get("x-forwarded-for") || "unknown"
-    await addActionLog({ projectId, userId: session.userId, userName: session.displayName, action: "unban", details: `Unbanned ${robloxUserId || banId}`, ip, status: "success" })
-
+    await addActionLog(projectId, session.userId, session.displayName, "unban", `Unbanned ${robloxUserId || banId}`)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Unban error:", error)

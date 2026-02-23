@@ -63,6 +63,8 @@ export async function getProject(id: string) {
   return rows[0] ?? null
 }
 
+export const getProjectById = getProject
+
 export async function getProjectsForUser(userId: string) {
   const q = sql()
   return q`
@@ -116,6 +118,22 @@ export async function getMemberRole(projectId: string, userId: string): Promise<
   const q = sql()
   const rows = await q`SELECT role FROM project_members WHERE project_id = ${projectId} AND user_id = ${userId}`
   return rows[0]?.role ?? null
+}
+
+export async function getProjectMember(projectId: string, userId: string) {
+  const q = sql()
+  const rows = await q`SELECT pm.*, u.display_name, u.avatar_url FROM project_members pm JOIN users u ON u.id = pm.user_id WHERE pm.project_id = ${projectId} AND pm.user_id = ${userId}`
+  return rows[0] ?? null
+}
+
+export async function updateMemberRole(projectId: string, userId: string, role: string) {
+  const q = sql()
+  await q`UPDATE project_members SET role = ${role} WHERE project_id = ${projectId} AND user_id = ${userId}`
+}
+
+export async function removeMember(projectId: string, userId: string) {
+  const q = sql()
+  await q`DELETE FROM project_members WHERE project_id = ${projectId} AND user_id = ${userId}`
 }
 
 // ---------- Licenses ----------
@@ -186,32 +204,30 @@ export async function unbanUser(banId: string) {
 
 // ---------- Action Logs ----------
 
-export async function addActionLog(data: {
-  projectId: string | null
-  userId: string
-  userName: string
-  action: string
-  details: string
-  ip: string
-  status: "success" | "error"
-}) {
+export async function addActionLog(projectId: string | null, userId: string, userName: string, action: string, details: string, ip = "") {
   const q = sql()
   await q`
     INSERT INTO action_logs (project_id, user_id, user_name, action, details, ip, status)
-    VALUES (${data.projectId}, ${data.userId}, ${data.userName}, ${data.action}, ${data.details}, ${data.ip}, ${data.status})
+    VALUES (${projectId}, ${userId}, ${userName}, ${action}, ${details}, ${ip}, 'success')
   `
 }
 
-export async function getActionLogs(projectId: string, limit = 50, offset = 0) {
+export async function getActionLogs(projectId: string, filterUserId?: string) {
   const q = sql()
-  const logs = await q`
+  if (filterUserId) {
+    return q`
+      SELECT * FROM action_logs
+      WHERE project_id = ${projectId} AND user_id = ${filterUserId}
+      ORDER BY created_at DESC
+      LIMIT 200
+    `
+  }
+  return q`
     SELECT * FROM action_logs
     WHERE project_id = ${projectId}
     ORDER BY created_at DESC
-    LIMIT ${limit} OFFSET ${offset}
+    LIMIT 200
   `
-  const countRes = await q`SELECT COUNT(*)::int as count FROM action_logs WHERE project_id = ${projectId}`
-  return { logs, total: countRes[0]?.count ?? 0 }
 }
 
 // ---------- Live Servers (from Lua heartbeat) ----------
