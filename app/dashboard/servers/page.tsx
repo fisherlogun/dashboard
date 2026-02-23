@@ -14,6 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Input } from "@/components/ui/input"
 import {
   Server,
   Users,
@@ -25,6 +26,8 @@ import {
   ChevronUp,
   User,
   Loader2,
+  Megaphone,
+  Send,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useSession } from "@/components/session-provider"
@@ -47,6 +50,8 @@ export default function ServersPage() {
   const [expandedServer, setExpandedServer] = useState<string | null>(null)
   const [shutdownTarget, setShutdownTarget] = useState<ServerData | null>(null)
   const [shuttingDown, setShuttingDown] = useState(false)
+  const [announceMsg, setAnnounceMsg] = useState("")
+  const [announcing, setAnnouncing] = useState(false)
 
   const canManage = user ? hasPermission(user.role as Role, "manage_config") : false
 
@@ -97,6 +102,29 @@ export default function ServersPage() {
     } finally {
       setShuttingDown(false)
       setShutdownTarget(null)
+    }
+  }
+
+  const handleAnnounce = async (serverId: string) => {
+    if (!announceMsg.trim()) return
+    setAnnouncing(true)
+    try {
+      const res = await fetch("/api/servers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serverId, action: "announce", message: announceMsg.trim() }),
+      })
+      if (res.ok) {
+        toast.success("Announcement sent to server")
+        setAnnounceMsg("")
+      } else {
+        const data = await res.json()
+        toast.error(data.error || "Failed to send announcement")
+      }
+    } catch {
+      toast.error("Network error")
+    } finally {
+      setAnnouncing(false)
     }
   }
 
@@ -255,6 +283,46 @@ export default function ServersPage() {
                         </p>
                       )}
                     </div>
+
+                    {/* Announce to this server */}
+                    {canManage && (
+                      <div className="border-t border-border pt-3">
+                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <Megaphone className="h-3 w-3" />
+                          Announce to this Server
+                        </h4>
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Type announcement message..."
+                            value={announceMsg}
+                            onChange={(e) => setAnnounceMsg(e.target.value)}
+                            className="text-sm"
+                            maxLength={500}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && announceMsg.trim()) {
+                                handleAnnounce(server.id)
+                              }
+                            }}
+                          />
+                          <Button
+                            size="sm"
+                            className="gap-1.5 shrink-0"
+                            disabled={!announceMsg.trim() || announcing}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleAnnounce(server.id)
+                            }}
+                          >
+                            {announcing ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Send className="h-3.5 w-3.5" />
+                            )}
+                            Send
+                          </Button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Actions */}
                     {canManage && (

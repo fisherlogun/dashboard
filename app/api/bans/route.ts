@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/roles"
-import { getBansCollection } from "@/lib/mongodb"
-import { addActionLog, getConfig } from "@/lib/db"
+import { addActionLog, getConfig, addBan, getBans, unbanUser } from "@/lib/db"
 import { publishMessage } from "@/lib/roblox"
 import type { Role } from "@/lib/roles"
 
@@ -13,13 +12,20 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const collection = await getBansCollection()
-    const bans = await collection.find({}).sort({ createdAt: -1 }).toArray()
+    const bans = getBans()
 
     return NextResponse.json({
       bans: bans.map((b) => ({
-        ...b,
-        _id: b._id.toString(),
+        _id: b.id,
+        robloxUserId: b.robloxUserId,
+        bannedBy: b.bannedBy,
+        bannedByName: b.bannedByName,
+        reason: b.reason,
+        privateReason: b.privateReason,
+        duration: b.duration,
+        expiresAt: b.expiresAt?.toISOString() ?? null,
+        createdAt: b.createdAt.toISOString(),
+        active: b.active,
       })),
     })
   } catch (error) {
@@ -40,7 +46,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { robloxUserId, robloxDisplayName, reason, privateReason, duration, expiresAt: expiresAtStr } = body
+    const { robloxUserId, reason, privateReason, duration, expiresAt: expiresAtStr } = body
 
     if (!robloxUserId || !reason || !duration) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -48,7 +54,7 @@ export async function POST(req: NextRequest) {
 
     const config = getConfig()
 
-    // Calculate expiration - support custom timestamp or preset durations
+    // Calculate expiration
     let expiresAt: Date | null = null
     let durationSeconds: number | null = null
 
@@ -77,7 +83,6 @@ export async function POST(req: NextRequest) {
         const banPayload = JSON.stringify({
           type: "ban",
           userId: String(robloxUserId),
-          displayName: robloxDisplayName || "Unknown",
           reason,
           privateReason: privateReason || reason,
           duration,
@@ -94,36 +99,27 @@ export async function POST(req: NextRequest) {
         )
       } catch (err) {
         console.error("MessagingService ban error:", err)
-        // Still save to local DB even if messaging fails
       }
     }
 
-    const collection = await getBansCollection()
-    await collection.updateOne(
-      { robloxUserId: String(robloxUserId) },
-      {
-        $set: {
-          robloxUserId: String(robloxUserId),
-          robloxDisplayName: robloxDisplayName || "Unknown",
-          bannedBy: session.userId,
-          bannedByName: session.displayName,
-          reason,
-          privateReason: privateReason || "",
-          duration,
-          durationSeconds,
-          expiresAt,
-          createdAt: new Date(),
-          active: true,
-        },
-      },
-      { upsert: true }
-    )
+    addBan({
+      robloxUserId: String(robloxUserId),
+      bannedBy: session.userId,
+      bannedByName: session.displayName,
+      reason,
+      privateReason: privateReason || "",
+      duration,
+      durationSeconds,
+      expiresAt,
+      createdAt: new Date(),
+      active: true,
+    })
 
     addActionLog({
       userId: session.userId,
       userName: session.displayName,
       action: "ban",
-      details: `Banned ${robloxDisplayName || robloxUserId} for ${duration}: ${reason}`,
+      details: `Banned ${robloxUserId} for ${duration}: ${reason}`,
       ip: "",
       status: "success",
     })
@@ -174,11 +170,7 @@ export async function DELETE(req: NextRequest) {
       }
     }
 
-    const collection = await getBansCollection()
-    await collection.updateOne(
-      { robloxUserId },
-      { $set: { active: false } }
-    )
+    unbanUser(robloxUserId)
 
     addActionLog({
       userId: session.userId,

@@ -27,11 +27,6 @@ export async function GET() {
 
     const serverData = await getServers(config.placeId)
 
-    console.log("[v0] Raw server data count:", serverData.data.length)
-    if (serverData.data.length > 0) {
-      console.log("[v0] First server raw:", JSON.stringify(serverData.data[0]))
-    }
-
     const servers = serverData.data.map(
       (s: { id: string; playing: number; maxPlayers: number; fps: number; ping: number; playerTokens: string[] }) => ({
         id: s.id,
@@ -102,6 +97,40 @@ export async function POST(request: NextRequest) {
       })
 
       return NextResponse.json({ success: true, message: "Shutdown command sent" })
+    }
+
+    if (action === "announce" && serverId) {
+      const { message: announceMsg } = body
+      if (!announceMsg || typeof announceMsg !== "string") {
+        return NextResponse.json({ error: "Message is required" }, { status: 400 })
+      }
+
+      const payload = JSON.stringify({
+        type: "announce",
+        message: announceMsg,
+        serverId,
+        issuedBy: session.displayName,
+        issuedAt: new Date().toISOString(),
+      })
+
+      await publishMessage(
+        config.universeId,
+        "DashboardCommands",
+        payload,
+        config.apiKey
+      )
+
+      const ip = request.headers.get("x-forwarded-for") || "unknown"
+      addActionLog({
+        userId: session.userId,
+        userName: session.displayName,
+        action: "server:announce",
+        details: `Announced to server ${serverId}: ${announceMsg}`,
+        ip,
+        status: "success",
+      })
+
+      return NextResponse.json({ success: true, message: "Announcement sent to server" })
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })

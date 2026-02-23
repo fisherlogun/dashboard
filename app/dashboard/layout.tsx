@@ -8,7 +8,6 @@ import { Separator } from "@/components/ui/separator"
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Overview",
   "/dashboard/servers": "Servers",
-  "/dashboard/players": "Players",
   "/dashboard/commands": "Commands",
   "/dashboard/bans": "Bans",
   "/dashboard/datastores": "Datastores",

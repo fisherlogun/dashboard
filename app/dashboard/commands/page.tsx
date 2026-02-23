@@ -106,7 +106,13 @@ MessagingService:SubscribeAsync("DashboardCommands", function(message)
             warnEvent:FireClient(player, data.reason, data.issuedBy)
         end
     elseif data.type == "announce" then
-        announceEvent:FireAllClients(data.message, data.issuedBy)
+        if data.serverId and data.serverId ~= "" then
+            if game.JobId == data.serverId then
+                announceEvent:FireAllClients(data.message, data.issuedBy)
+            end
+        else
+            announceEvent:FireAllClients(data.message, data.issuedBy)
+        end
     elseif data.type == "shutdown_server" then
         if game.JobId == data.serverId then
             for _, player in Players:GetPlayers() do
@@ -161,7 +167,6 @@ export default function CommandsPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             robloxUserId: playerId,
-            robloxDisplayName: "Unknown",
             reason,
             privateReason,
             duration,
@@ -299,7 +304,7 @@ export default function CommandsPage() {
             </CardTitle>
             <CardDescription>
               {commandType === "ban"
-                ? "Ban players using Roblox's Ban API. The player will also be kicked from the current server."
+                ? "Ban data is sent to your game via MessagingService. The player will also be kicked."
                 : "Send commands to your Roblox experience via MessagingService."}
             </CardDescription>
           </CardHeader>
