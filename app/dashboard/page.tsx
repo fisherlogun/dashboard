@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { useSession } from "@/components/session-provider"
 import { Button } from "@/components/ui/button"
 import {
@@ -60,7 +61,8 @@ function MiniChart({ data }: { data: { player_count: number; recorded_at: string
 }
 
 export default function DashboardPage() {
-  const { activeProject } = useSession()
+  const router = useRouter()
+  const { activeProject, projects, loading } = useSession()
   const { data: stats, mutate, isLoading } = useSWR(
     activeProject ? `/api/stats?projectId=${activeProject.id}` : null,
     fetcher,
@@ -85,6 +87,12 @@ export default function DashboardPage() {
     finally { setShuttingDown(false) }
   }
 
+  // If user has no projects at all, redirect to create one
+  if (!loading && projects.length === 0) {
+    router.push("/setup")
+    return null
+  }
+
   if (!activeProject) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
@@ -92,8 +100,8 @@ export default function DashboardPage() {
           <AlertTriangle className="h-8 w-8 text-warning mx-auto mb-4" />
           <h2 className="font-mono text-sm font-bold text-foreground mb-2">NO PROJECT SELECTED</h2>
           <p className="font-mono text-xs text-muted-foreground mb-4">Create or select a project from the sidebar to begin.</p>
-          <Button variant="outline" size="sm" className="font-mono text-xs" asChild>
-            <a href="/dashboard/settings?tab=projects">CREATE PROJECT</a>
+          <Button variant="outline" size="sm" className="font-mono text-xs" onClick={() => router.push("/setup")}>
+            CREATE PROJECT
           </Button>
         </div>
       </div>

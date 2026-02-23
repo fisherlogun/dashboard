@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label"
 import { Loader2, Cpu, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { useSession } from "@/components/session-provider"
+import { useEffect } from "react"
 
 export default function SetupPage() {
   const router = useRouter()
-  const { user } = useSession()
+  const { user, refreshProjects } = useSession()
   const [loading, setLoading] = useState(false)
   const [name, setName] = useState("")
   const [apiKey, setApiKey] = useState("")
@@ -33,6 +34,7 @@ export default function SetupPage() {
       const data = await res.json()
       if (res.ok && data.project) {
         toast.success("Project created")
+        await refreshProjects()
         router.push("/dashboard")
       } else {
         toast.error(data.error || "Failed to create project")

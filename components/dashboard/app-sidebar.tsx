@@ -106,7 +106,7 @@ export function AppSidebar() {
             ))}
             {projects.length > 0 && <DropdownMenuSeparator />}
             <DropdownMenuItem asChild className="font-mono text-xs">
-              <Link href="/dashboard/settings?tab=projects">
+              <Link href="/setup">
                 <Plus className="mr-2 h-3 w-3" />
                 New Project
               </Link>
