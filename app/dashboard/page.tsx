@@ -62,7 +62,7 @@ function MiniChart({ data }: { data: { player_count: number; recorded_at: string
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { activeProject, projects, loading } = useSession()
+  const { activeProject, projects, loading, setActiveProject } = useSession()
   const { data: stats, mutate, isLoading } = useSWR(
     activeProject ? `/api/stats?projectId=${activeProject.id}` : null,
     fetcher,
@@ -87,23 +87,64 @@ export default function DashboardPage() {
     finally { setShuttingDown(false) }
   }
 
-  // If user has no projects at all, redirect to create one
-  if (!loading && projects.length === 0) {
-    router.push("/setup")
-    return null
-  }
-
   if (!activeProject) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-        <div className="border border-border bg-card p-8 text-center">
-          <AlertTriangle className="h-8 w-8 text-warning mx-auto mb-4" />
-          <h2 className="font-mono text-sm font-bold text-foreground mb-2">NO PROJECT SELECTED</h2>
-          <p className="font-mono text-xs text-muted-foreground mb-4">Create or select a project from the sidebar to begin.</p>
-          <Button variant="outline" size="sm" className="font-mono text-xs" onClick={() => router.push("/setup")}>
-            CREATE PROJECT
-          </Button>
+      <div className="max-w-xl mx-auto mt-12 space-y-4">
+        <div className="border border-border bg-card p-6">
+          <h2 className="font-mono text-sm font-bold text-foreground mb-1">YOUR PROJECTS</h2>
+          <p className="font-mono text-[10px] text-muted-foreground mb-4">
+            Select a project to open, or create a new one.
+          </p>
+
+          {loading ? (
+            <div className="flex items-center gap-2 py-6 justify-center">
+              <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />
+              <span className="font-mono text-xs text-muted-foreground">Loading projects...</span>
+            </div>
+          ) : projects.length === 0 ? (
+            <div className="border border-dashed border-border p-6 text-center">
+              <Server className="h-5 w-5 text-muted-foreground mx-auto mb-2" />
+              <span className="font-mono text-xs text-muted-foreground block">No projects found.</span>
+              <span className="font-mono text-[10px] text-muted-foreground block mt-1">
+                Create your first project or ask an owner to add you.
+              </span>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {projects.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => {
+                    setActiveProject(p)
+                    toast.success(`Switched to ${p.name}`)
+                  }}
+                  className="w-full flex items-center justify-between border border-border bg-background p-3 hover:bg-muted/30 transition-colors text-left"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-2 w-2 bg-primary shrink-0" />
+                    <div className="min-w-0">
+                      <span className="font-mono text-xs text-foreground block truncate">{p.name}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground block">
+                        UID:{p.universe_id} / PID:{p.place_id}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground shrink-0 ml-3">
+                    {p.role}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+
+        <Button
+          variant="outline"
+          className="w-full font-mono text-xs h-10"
+          onClick={() => router.push("/setup")}
+        >
+          + CREATE NEW PROJECT
+        </Button>
       </div>
     )
   }
