@@ -1,377 +1,266 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState } from "react"
+import { useSession } from "@/components/session-provider"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import {
-  Server,
-  Users,
-  RefreshCw,
-  Wifi,
-  MonitorDot,
-  Power,
-  ChevronDown,
-  ChevronUp,
-  User,
-  Loader2,
-  Megaphone,
-  Send,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  Server, Users, RefreshCw, Wifi, Cpu, Power, ChevronDown, ChevronUp,
+  Megaphone, Send, Loader2, AlertTriangle, Clock,
 } from "lucide-react"
 import { toast } from "sonner"
-import { useSession } from "@/components/session-provider"
-import { hasPermission, type Role } from "@/lib/roles"
+import useSWR from "swr"
+
+const fetcher = (url: string) => fetch(url).then(r => r.json())
+
+interface ServerPlayer {
+  user_id: string
+  display_name: string
+  username: string
+  play_time: number
+  avatar_url: string
+}
 
 interface ServerData {
   id: string
   players: number
-  maxPlayers: number
+  max_players: number
   fps: number
   ping: number
-  playerTokens: string[]
+  uptime: number
+  last_heartbeat: string
+  playerList: ServerPlayer[]
 }
 
 export default function ServersPage() {
-  const { user } = useSession()
-  const [servers, setServers] = useState<ServerData[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [expandedServer, setExpandedServer] = useState<string | null>(null)
+  const { activeProject } = useSession()
+  const { data, mutate, isLoading } = useSWR(
+    activeProject ? `/api/servers?projectId=${activeProject.id}` : null,
+    fetcher,
+    { refreshInterval: 15000 }
+  )
+
+  const [expanded, setExpanded] = useState<string | null>(null)
   const [shutdownTarget, setShutdownTarget] = useState<ServerData | null>(null)
   const [shuttingDown, setShuttingDown] = useState(false)
   const [announceMsg, setAnnounceMsg] = useState("")
   const [announcing, setAnnouncing] = useState(false)
 
-  const canManage = user ? hasPermission(user.role as Role, "manage_config") : false
-
-  const fetchServers = useCallback(async (showRefresh = false) => {
-    if (showRefresh) setRefreshing(true)
-    try {
-      const res = await fetch("/api/servers")
-      if (res.ok) {
-        const data = await res.json()
-        setServers(data.servers)
-      } else if (res.status === 400) {
-        const data = await res.json()
-        if (data.setupRequired) {
-          window.location.href = "/setup"
-        }
-      }
-    } catch {
-      toast.error("Failed to fetch servers")
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchServers()
-    const interval = setInterval(() => fetchServers(), 30000)
-    return () => clearInterval(interval)
-  }, [fetchServers])
+  const servers: ServerData[] = data?.servers ?? []
+  const totalPlayers = servers.reduce((s, sv) => s + sv.players, 0)
+  const totalCapacity = servers.reduce((s, sv) => s + sv.max_players, 0)
 
   const handleShutdown = async () => {
-    if (!shutdownTarget) return
+    if (!shutdownTarget || !activeProject) return
     setShuttingDown(true)
     try {
       const res = await fetch("/api/servers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serverId: shutdownTarget.id, action: "shutdown" }),
+        body: JSON.stringify({ projectId: activeProject.id, action: "shutdown_server", serverId: shutdownTarget.id }),
       })
-      if (res.ok) {
-        toast.success(`Shutdown command sent to server ${shutdownTarget.id.slice(0, 8)}...`)
-      } else {
-        const data = await res.json()
-        toast.error(data.error || "Failed to shutdown server")
-      }
-    } catch {
-      toast.error("Network error")
-    } finally {
-      setShuttingDown(false)
-      setShutdownTarget(null)
-    }
+      if (res.ok) toast.success(`Shutdown sent to ${shutdownTarget.id.slice(0, 8)}`)
+      else toast.error("Failed")
+    } catch { toast.error("Network error") }
+    finally { setShuttingDown(false); setShutdownTarget(null) }
   }
 
   const handleAnnounce = async (serverId: string) => {
-    if (!announceMsg.trim()) return
+    if (!announceMsg.trim() || !activeProject) return
     setAnnouncing(true)
     try {
       const res = await fetch("/api/servers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serverId, action: "announce", message: announceMsg.trim() }),
+        body: JSON.stringify({ projectId: activeProject.id, action: "announce", serverId, message: announceMsg.trim() }),
       })
-      if (res.ok) {
-        toast.success("Announcement sent to server")
-        setAnnounceMsg("")
-      } else {
-        const data = await res.json()
-        toast.error(data.error || "Failed to send announcement")
-      }
-    } catch {
-      toast.error("Network error")
-    } finally {
-      setAnnouncing(false)
-    }
+      if (res.ok) { toast.success("Announcement sent"); setAnnounceMsg("") }
+      else toast.error("Failed")
+    } catch { toast.error("Network error") }
+    finally { setAnnouncing(false) }
   }
 
-  const totalPlayers = servers.reduce((sum, s) => sum + s.players, 0)
-  const totalCapacity = servers.reduce((sum, s) => sum + s.maxPlayers, 0)
+  const formatUptime = (secs: number) => {
+    const h = Math.floor(secs / 3600)
+    const m = Math.floor((secs % 3600) / 60)
+    return h > 0 ? `${h}h ${m}m` : `${m}m`
+  }
+
+  if (!activeProject) {
+    return (
+      <div className="flex items-center justify-center h-[60vh]">
+        <div className="border border-border bg-card p-8 text-center">
+          <AlertTriangle className="h-8 w-8 text-warning mx-auto mb-4" />
+          <p className="font-mono text-xs text-muted-foreground">Select a project first.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15">
-            <Server className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">Servers</h1>
-            <p className="text-sm text-muted-foreground">
-              {servers.length} active {servers.length === 1 ? "server" : "servers"} | {totalPlayers}/{totalCapacity} players
-            </p>
-          </div>
+          <Server className="h-4 w-4 text-primary" />
+          <span className="font-mono text-xs text-foreground">{servers.length} LIVE SERVERS</span>
+          <span className="font-mono text-[10px] text-muted-foreground">{totalPlayers}/{totalCapacity} players</span>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => fetchServers(true)}
-          disabled={refreshing}
-          className="gap-1.5"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-          Refresh
+        <Button variant="outline" size="sm" className="font-mono text-[10px] h-7 gap-1.5" onClick={() => mutate()} disabled={isLoading}>
+          <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
+          REFRESH
         </Button>
       </div>
 
       {/* Server List */}
-      {loading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-28 animate-pulse rounded-lg border border-border bg-card" />
-          ))}
+      {isLoading ? (
+        <div className="space-y-1">
+          {[1,2,3].map(i => <div key={i} className="h-20 animate-pulse bg-card border border-border" />)}
         </div>
       ) : servers.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <Server className="mb-3 h-10 w-10 text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground">No servers online</p>
-            <p className="text-xs text-muted-foreground">Servers will appear here when players join your game.</p>
-          </CardContent>
-        </Card>
+        <div className="border border-border bg-card p-12 text-center">
+          <Server className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
+          <span className="font-mono text-xs text-muted-foreground block">No servers currently online</span>
+          <span className="font-mono text-[10px] text-muted-foreground/60 block mt-1">Servers appear when the Lua heartbeat script sends data</span>
+        </div>
       ) : (
-        <div className="space-y-3">
-          {servers.map((server) => {
-            const isExpanded = expandedServer === server.id
-            const fillPercent = Math.round((server.players / server.maxPlayers) * 100)
-            const fillColor =
-              fillPercent >= 90 ? "bg-destructive" : fillPercent >= 70 ? "bg-warning" : "bg-success"
+        <div className="space-y-1">
+          {servers.map(server => {
+            const isOpen = expanded === server.id
+            const fillPct = server.max_players > 0 ? Math.round((server.players / server.max_players) * 100) : 0
+            const fpsColor = server.fps >= 55 ? "text-success" : server.fps >= 30 ? "text-warning" : "text-destructive"
+            const pingColor = server.ping <= 100 ? "text-success" : server.ping <= 200 ? "text-warning" : "text-destructive"
 
             return (
-              <Card key={server.id} className="overflow-hidden">
-                {/* Server Row - clickable */}
+              <div key={server.id} className="border border-border bg-card">
+                {/* Row */}
                 <button
-                  onClick={() => setExpandedServer(isExpanded ? null : server.id)}
-                  className="flex w-full items-center justify-between p-4 text-left transition-colors hover:bg-accent/30"
+                  onClick={() => setExpanded(isOpen ? null : server.id)}
+                  className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-accent/30 transition-colors"
                 >
                   <div className="flex items-center gap-4 min-w-0 flex-1">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <MonitorDot className="h-4.5 w-4.5 text-primary" />
-                    </div>
+                    <div className="h-2.5 w-2.5 bg-success led-pulse shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-medium text-foreground truncate">
-                          {server.id}
+                      <span className="font-mono text-xs text-foreground truncate block">{server.id}</span>
+                      <div className="flex items-center gap-4 mt-0.5">
+                        <span className="font-mono text-[10px] text-muted-foreground flex items-center gap-1">
+                          <Users className="h-3 w-3" />{server.players}/{server.max_players}
                         </span>
-                        <Badge variant="outline" className="text-success text-[10px] shrink-0">
-                          Live
-                        </Badge>
-                      </div>
-                      <div className="mt-1 flex items-center gap-4 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          {server.players}/{server.maxPlayers} players
+                        <span className={`font-mono text-[10px] flex items-center gap-1 ${fpsColor}`}>
+                          <Cpu className="h-3 w-3" />{server.fps} FPS
                         </span>
-                        <span className="flex items-center gap-1">
-                          <MonitorDot className="h-3 w-3" />
-                          {server.fps} FPS
+                        <span className={`font-mono text-[10px] flex items-center gap-1 ${pingColor}`}>
+                          <Wifi className="h-3 w-3" />{server.ping}ms
                         </span>
-                        <span className="flex items-center gap-1">
-                          <Wifi className="h-3 w-3" />
-                          {server.ping}ms
+                        <span className="font-mono text-[10px] text-muted-foreground flex items-center gap-1">
+                          <Clock className="h-3 w-3" />{formatUptime(server.uptime)}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-4">
-                    {/* Player fill bar */}
-                    <div className="hidden sm:block w-24">
-                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div className="flex items-center gap-3 shrink-0 ml-4">
+                    {/* Fill bar */}
+                    <div className="hidden sm:block w-20">
+                      <div className="h-1 bg-muted overflow-hidden">
                         <div
-                          className={`h-full rounded-full transition-all ${fillColor}`}
-                          style={{ width: `${fillPercent}%` }}
+                          className={`h-full transition-all ${fillPct >= 90 ? "bg-destructive" : fillPct >= 70 ? "bg-warning" : "bg-success"}`}
+                          style={{ width: `${fillPct}%` }}
                         />
                       </div>
+                      <span className="font-mono text-[9px] text-muted-foreground">{fillPct}%</span>
                     </div>
-                    {isExpanded ? (
-                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    )}
+                    {isOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
                   </div>
                 </button>
 
-                {/* Expanded Content */}
-                {isExpanded && (
-                  <div className="border-t border-border bg-muted/30 p-4 space-y-4">
-                    {/* Metrics Row */}
-                    <div className="grid grid-cols-4 gap-3">
-                      <div className="rounded-lg border border-border bg-card p-3 text-center">
-                        <p className="text-lg font-bold text-foreground font-mono">{server.players}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Players</p>
-                      </div>
-                      <div className="rounded-lg border border-border bg-card p-3 text-center">
-                        <p className="text-lg font-bold text-foreground font-mono">{server.maxPlayers}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Capacity</p>
-                      </div>
-                      <div className="rounded-lg border border-border bg-card p-3 text-center">
-                        <p className="text-lg font-bold text-foreground font-mono">{server.fps}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">FPS</p>
-                      </div>
-                      <div className="rounded-lg border border-border bg-card p-3 text-center">
-                        <p className="text-lg font-bold text-foreground font-mono">{server.ping}ms</p>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Ping</p>
-                      </div>
+                {/* Expanded */}
+                {isOpen && (
+                  <div className="border-t border-border bg-muted/20 p-4 space-y-4">
+                    {/* Metrics */}
+                    <div className="grid grid-cols-4 gap-px bg-border border border-border">
+                      {[
+                        { label: "Players", value: server.players, color: "text-primary" },
+                        { label: "Capacity", value: server.max_players, color: "text-foreground" },
+                        { label: "FPS", value: server.fps, color: fpsColor },
+                        { label: "Ping", value: `${server.ping}ms`, color: pingColor },
+                      ].map(m => (
+                        <div key={m.label} className="bg-card p-3 text-center">
+                          <span className={`font-mono text-lg font-bold ${m.color} block`}>{m.value}</span>
+                          <span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">{m.label}</span>
+                        </div>
+                      ))}
                     </div>
 
-                    {/* Player Tokens */}
+                    {/* Player List */}
                     <div>
-                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                        Players in Server ({server.players})
-                      </h4>
-                      {server.playerTokens.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                          {server.playerTokens.map((token, idx) => (
-                            <div
-                              key={token}
-                              className="flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5"
-                            >
-                              <User className="h-3 w-3 text-muted-foreground shrink-0" />
-                              <span className="text-xs font-mono text-foreground truncate">
-                                Player {idx + 1}
-                              </span>
+                      <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground block mb-2">
+                        PLAYERS IN SERVER ({server.playerList?.length ?? 0})
+                      </span>
+                      {server.playerList && server.playerList.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1">
+                          {server.playerList.map((p: ServerPlayer) => (
+                            <div key={p.user_id} className="flex items-center gap-2 bg-card border border-border px-2 py-1.5">
+                              <img src={p.avatar_url} alt="" className="h-5 w-5 border border-border shrink-0" crossOrigin="anonymous" />
+                              <div className="min-w-0">
+                                <span className="font-mono text-[10px] text-foreground truncate block">{p.display_name}</span>
+                                <span className="font-mono text-[9px] text-muted-foreground truncate block">{p.user_id}</span>
+                              </div>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-xs text-muted-foreground">
-                          Player tokens are anonymous identifiers. {server.players} player{server.players !== 1 ? "s" : ""} currently connected.
-                        </p>
+                        <span className="font-mono text-[10px] text-muted-foreground">Awaiting player data from heartbeat...</span>
                       )}
                     </div>
 
-                    {/* Announce to this server */}
-                    {canManage && (
-                      <div className="border-t border-border pt-3">
-                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                          <Megaphone className="h-3 w-3" />
-                          Announce to this Server
-                        </h4>
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Type announcement message..."
-                            value={announceMsg}
-                            onChange={(e) => setAnnounceMsg(e.target.value)}
-                            className="text-sm"
-                            maxLength={500}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && announceMsg.trim()) {
-                                handleAnnounce(server.id)
-                              }
-                            }}
-                          />
-                          <Button
-                            size="sm"
-                            className="gap-1.5 shrink-0"
-                            disabled={!announceMsg.trim() || announcing}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleAnnounce(server.id)
-                            }}
-                          >
-                            {announcing ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Send className="h-3.5 w-3.5" />
-                            )}
-                            Send
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Actions */}
-                    {canManage && (
-                      <div className="flex items-center justify-between border-t border-border pt-3">
-                        <p className="text-xs text-muted-foreground">
-                          Server actions require owner or admin permissions.
-                        </p>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="gap-1.5"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setShutdownTarget(server)
-                          }}
-                        >
-                          <Power className="h-3.5 w-3.5" />
-                          Shutdown
+                    {/* Announce */}
+                    <div className="border-t border-border pt-3">
+                      <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 mb-2">
+                        <Megaphone className="h-3 w-3" /> ANNOUNCE
+                      </span>
+                      <div className="flex gap-2">
+                        <Input value={announceMsg} onChange={e => setAnnounceMsg(e.target.value)} placeholder="Message..." className="font-mono text-xs h-7 bg-card" onKeyDown={e => { if (e.key === "Enter" && announceMsg.trim()) handleAnnounce(server.id) }} />
+                        <Button size="sm" className="font-mono text-[10px] h-7 gap-1" disabled={!announceMsg.trim() || announcing} onClick={() => handleAnnounce(server.id)}>
+                          {announcing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                          SEND
                         </Button>
                       </div>
-                    )}
+                    </div>
+
+                    {/* Shutdown */}
+                    <div className="flex justify-end border-t border-border pt-3">
+                      <Button variant="destructive" size="sm" className="font-mono text-[10px] h-7 gap-1" onClick={() => setShutdownTarget(server)}>
+                        <Power className="h-3 w-3" />
+                        SHUTDOWN
+                      </Button>
+                    </div>
                   </div>
                 )}
-              </Card>
+              </div>
             )
           })}
         </div>
       )}
 
-      {/* Shutdown Confirmation */}
-      <AlertDialog open={!!shutdownTarget} onOpenChange={(open) => !open && setShutdownTarget(null)}>
+      {/* Shutdown Dialog */}
+      <AlertDialog open={!!shutdownTarget} onOpenChange={open => { if (!open) setShutdownTarget(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Shutdown Server</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to shutdown server{" "}
-              <span className="font-mono text-foreground">{shutdownTarget?.id.slice(0, 12)}...</span>?
-              This will disconnect {shutdownTarget?.players} player{shutdownTarget?.players !== 1 ? "s" : ""}. This action will be logged.
+            <AlertDialogTitle className="font-mono text-sm">CONFIRM SHUTDOWN</AlertDialogTitle>
+            <AlertDialogDescription className="font-mono text-xs">
+              Shutdown server <span className="text-foreground">{shutdownTarget?.id.slice(0, 12)}...</span>?
+              This disconnects {shutdownTarget?.players} player{shutdownTarget?.players !== 1 ? "s" : ""}.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleShutdown}
-              disabled={shuttingDown}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {shuttingDown && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Shutdown
+            <AlertDialogCancel className="font-mono text-xs">CANCEL</AlertDialogCancel>
+            <AlertDialogAction onClick={handleShutdown} disabled={shuttingDown} className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-mono text-xs">
+              {shuttingDown && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+              SHUTDOWN
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
