@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth"
 import { hasPermission } from "@/lib/roles"
 import { getBansCollection } from "@/lib/mongodb"
 import { addActionLog, getConfig } from "@/lib/db"
-import { banPlayer, unbanPlayer } from "@/lib/roblox"
+import { publishMessage } from "@/lib/roblox"
 import type { Role } from "@/lib/roles"
 
 export async function GET() {
@@ -71,20 +71,30 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Call Roblox Ban API
+    // Send ban command to the game via MessagingService
     if (config) {
       try {
-        await banPlayer(
-          config.universeId,
-          String(robloxUserId),
+        const banPayload = JSON.stringify({
+          type: "ban",
+          userId: String(robloxUserId),
+          displayName: robloxDisplayName || "Unknown",
           reason,
-          privateReason || reason,
+          privateReason: privateReason || reason,
+          duration,
           durationSeconds,
+          expiresAt: expiresAt?.toISOString() ?? null,
+          issuedBy: session.displayName,
+          issuedAt: new Date().toISOString(),
+        })
+        await publishMessage(
+          config.universeId,
+          "DashboardCommands",
+          banPayload,
           config.apiKey
         )
       } catch (err) {
-        console.error("Roblox Ban API error:", err)
-        // Still save to local DB even if Roblox API fails
+        console.error("MessagingService ban error:", err)
+        // Still save to local DB even if messaging fails
       }
     }
 
@@ -144,12 +154,23 @@ export async function DELETE(req: NextRequest) {
 
     const config = getConfig()
 
-    // Call Roblox Unban API
+    // Send unban command to the game via MessagingService
     if (config) {
       try {
-        await unbanPlayer(config.universeId, robloxUserId, config.apiKey)
+        const unbanPayload = JSON.stringify({
+          type: "unban",
+          userId: robloxUserId,
+          issuedBy: session.displayName,
+          issuedAt: new Date().toISOString(),
+        })
+        await publishMessage(
+          config.universeId,
+          "DashboardCommands",
+          unbanPayload,
+          config.apiKey
+        )
       } catch (err) {
-        console.error("Roblox Unban API error:", err)
+        console.error("MessagingService unban error:", err)
       }
     }
 
