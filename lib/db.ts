@@ -1,4 +1,4 @@
-// In-memory mock database layera
+// In-memory mock database layeraa
 // Easily replaceable with a real database (Supabase, Neon, etc.)
 
 export interface AppConfig {
