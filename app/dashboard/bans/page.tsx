@@ -48,7 +48,6 @@ export default function BansPage() {
   const [showPrivateReasons, setShowPrivateReasons] = useState(false)
   const [form, setForm] = useState({
     userId: "",
-    displayName: "",
     reason: "",
     privateReason: "",
     duration: "1d",
@@ -93,7 +92,6 @@ export default function BansPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           robloxUserId: form.userId.trim(),
-          robloxDisplayName: form.displayName.trim() || "Unknown",
           reason: form.reason.trim(),
           privateReason: form.privateReason.trim(),
           duration: form.duration,
@@ -103,8 +101,8 @@ export default function BansPage() {
         }),
       })
       if (res.ok) {
-        toast.success("User banned via Roblox Ban API")
-        setForm({ userId: "", displayName: "", reason: "", privateReason: "", duration: "1d" })
+        toast.success("Ban sent to game")
+        setForm({ userId: "", reason: "", privateReason: "", duration: "1d" })
         setCustomDate(undefined)
         setShowAdd(false)
         fetchBans()
@@ -123,7 +121,7 @@ export default function BansPage() {
     try {
       const res = await fetch(`/api/bans?userId=${userId}`, { method: "DELETE" })
       if (res.ok) {
-        toast.success(`${name} has been unbanned via Roblox API`)
+        toast.success(`User ${name} unbanned`)
         fetchBans()
       }
     } catch {
@@ -133,7 +131,6 @@ export default function BansPage() {
 
   const filtered = bans.filter(
     (b) =>
-      b.robloxDisplayName.toLowerCase().includes(search.toLowerCase()) ||
       b.robloxUserId.includes(search) ||
       b.reason.toLowerCase().includes(search.toLowerCase())
   )
@@ -151,7 +148,7 @@ export default function BansPage() {
           <div>
             <h1 className="text-xl font-semibold text-foreground">Bans</h1>
             <p className="text-sm text-muted-foreground">
-              {activeBans.length} active {activeBans.length === 1 ? "ban" : "bans"} | Uses Roblox Ban API
+              {activeBans.length} active {activeBans.length === 1 ? "ban" : "bans"}
             </p>
           </div>
         </div>
@@ -180,28 +177,18 @@ export default function BansPage() {
           <CardHeader>
             <CardTitle className="text-base">Ban a Player</CardTitle>
             <CardDescription>
-              This will use Roblox's Ban API to restrict the player from joining your game.
+              Ban data is sent to your game via MessagingService. Handle it in your Lua script.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Roblox User ID</Label>
-                <Input
-                  placeholder="e.g. 123456789"
-                  value={form.userId}
-                  onChange={(e) => setForm((f) => ({ ...f, userId: e.target.value }))}
-                  className="font-mono"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Display Name (optional)</Label>
-                <Input
-                  placeholder="Player display name"
-                  value={form.displayName}
-                  onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Roblox User ID</Label>
+              <Input
+                placeholder="e.g. 123456789"
+                value={form.userId}
+                onChange={(e) => setForm((f) => ({ ...f, userId: e.target.value }))}
+                className="font-mono max-w-xs"
+              />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Reason (shown to player)</Label>
@@ -304,15 +291,12 @@ export default function BansPage() {
                 className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
               >
                 <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-xs font-bold text-destructive-foreground">
-                    {ban.robloxDisplayName[0]?.toUpperCase() || "?"}
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-xs font-bold text-destructive-foreground font-mono">
+                    {ban.robloxUserId.slice(0, 2)}
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-card-foreground">
-                        {ban.robloxDisplayName}
-                      </span>
-                      <span className="font-mono text-xs text-muted-foreground">
+                      <span className="text-sm font-medium font-mono text-card-foreground">
                         {ban.robloxUserId}
                       </span>
                       {ban.active && !isExpired ? (
@@ -350,7 +334,7 @@ export default function BansPage() {
                     variant="outline"
                     size="sm"
                     className="shrink-0 text-xs"
-                    onClick={() => handleUnban(ban.robloxUserId, ban.robloxDisplayName)}
+                    onClick={() => handleUnban(ban.robloxUserId, ban.robloxUserId)}
                   >
                     Unban
                   </Button>

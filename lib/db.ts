@@ -1,4 +1,4 @@
-// In-memory mock database layera
+// In-memory mock database layeraa
 // Easily replaceable with a real database (Supabase, Neon, etc.)
 
 export interface AppConfig {
@@ -27,11 +27,28 @@ export interface ActionLog {
   status: "success" | "error"
 }
 
+// ---------- Ban Entry ----------
+
+export interface BanEntry {
+  id: string
+  robloxUserId: string
+  bannedBy: string
+  bannedByName: string
+  reason: string
+  privateReason: string
+  duration: string
+  durationSeconds: number | null
+  expiresAt: Date | null
+  createdAt: Date
+  active: boolean
+}
+
 // In-memory stores
 let config: AppConfig | null = null
 const userRoles: Map<string, UserRole> = new Map()
 const actionLogs: ActionLog[] = []
 const playerHistory: { timestamp: Date; players: number }[] = []
+const bans: Map<string, BanEntry> = new Map()
 
 // ---------- Config ----------
 
@@ -130,4 +147,29 @@ export function addPlayerHistoryPoint(players: number): void {
 
 export function getPlayerHistory(): { timestamp: Date; players: number }[] {
   return [...playerHistory]
+}
+
+// ---------- Bans ----------
+
+export function addBan(ban: Omit<BanEntry, "id">): BanEntry {
+  const entry: BanEntry = {
+    ...ban,
+    id: crypto.randomUUID(),
+  }
+  bans.set(ban.robloxUserId, entry)
+  return entry
+}
+
+export function getBans(): BanEntry[] {
+  return Array.from(bans.values()).sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+  )
+}
+
+export function unbanUser(robloxUserId: string): void {
+  const ban = bans.get(robloxUserId)
+  if (ban) {
+    ban.active = false
+    bans.set(robloxUserId, ban)
+  }
 }

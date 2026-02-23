@@ -10,7 +10,6 @@ import {
   Settings,
   Gamepad2,
   Server,
-  Users,
   ShieldBan,
   Database,
   KeyRound,
@@ -34,7 +33,6 @@ import { UserMenu } from "@/components/dashboard/user-menu"
 const mainNav = [
   { title: "Overview", url: "/dashboard", icon: BarChart3 },
   { title: "Servers", url: "/dashboard/servers", icon: Server },
-  { title: "Players", url: "/dashboard/players", icon: Users },
   { title: "Commands", url: "/dashboard/commands", icon: Terminal },
 ]
 
