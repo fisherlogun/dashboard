@@ -104,6 +104,17 @@ export default function SettingsPage() {
           <span className="text-muted-foreground">Name</span><span className="text-foreground">{activeProject.name}</span>
           <span className="text-muted-foreground">Your Role</span>
           <Badge variant="outline" className="text-[10px] font-mono w-fit">{myRole?.toUpperCase()}</Badge>
+          <span className="text-muted-foreground">Universe ID</span><span className="text-foreground">{activeProject.universe_id}</span>
+          <span className="text-muted-foreground">Place ID</span><span className="text-foreground">{activeProject.place_id}</span>
+        </div>
+        <div className="pt-2 border-t border-border/50 space-y-1">
+          <span className="text-[10px] font-mono text-muted-foreground uppercase">Project ID (for Lua script)</span>
+          <div className="flex items-center gap-2">
+            <code className="text-xs font-mono text-primary bg-primary/5 border border-primary/20 px-2 py-1 select-all break-all">{activeProject.id}</code>
+            <Button variant="outline" size="sm" className="h-6 text-[10px] font-mono shrink-0" onClick={() => { navigator.clipboard.writeText(activeProject.id); toast.success("Project ID copied") }}>
+              COPY
+            </Button>
+          </div>
         </div>
       </div>
 
