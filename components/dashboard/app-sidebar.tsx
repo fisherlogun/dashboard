@@ -35,6 +35,7 @@ import {
   LogOut,
   Plus,
   Radio,
+  Database,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -47,6 +48,7 @@ const mainNav = [
 
 const managementNav = [
   { title: "BANS", url: "/dashboard/bans", icon: ShieldBan },
+  { title: "DATASTORES", url: "/dashboard/datastores", icon: Database },
   { title: "LOGS", url: "/dashboard/logs", icon: ScrollText },
   { title: "SETTINGS", url: "/dashboard/settings", icon: Settings },
 ]
