@@ -38,6 +38,10 @@ export async function POST(req: NextRequest) {
     // Upsert each player
     if (Array.isArray(playerList)) {
       for (const p of playerList) {
+        const avatarUrl = (await fetch(
+          `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${p.userId}&size=150x150&format=Png&isCircular=false`
+        ).then(r => r.json())).data?.[0]?.imageUrl ?? null
+
         await upsertLivePlayer({
           userId: String(p.userId),
           projectId,
@@ -46,11 +50,10 @@ export async function POST(req: NextRequest) {
           username: p.username || "Unknown",
           playTime: p.playTime ?? 0,
           accountAge: p.accountAge ?? 0,
-          avatarUrl: `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${p.userId}&size=150x150&format=Png&isCircular=false`,
+          avatarUrl,
         })
       }
     }
-
     // Record a history point (throttled -- only insert if newest record is >25s old)
     // This is a simple approach; the Lua script calls every 15s
     try {
