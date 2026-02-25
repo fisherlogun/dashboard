@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
           username: p.username || "Unknown",
           playTime: p.playTime ?? 0,
           accountAge: p.accountAge ?? 0,
-          avatarUrl: `https://www.roblox.com/headshot-thumbnail/image?userId=${p.userId}&width=150&height=150&format=png`,
+          avatarUrl: `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${p.userId}&size=150x150&format=Png&isCircular=false`,
         })
       }
     }
