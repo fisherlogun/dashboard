@@ -33,7 +33,7 @@
   --chart-3: #ff9100;
   --chart-4: #7c4dff;
   --chart-5: #ff3b4f;
-  --radius: 0px;
+  --radius: px;
   --sidebar: #070b12;
   --sidebar-foreground: #c8d6e5;
   --sidebar-primary: #00e5ff;
@@ -136,6 +136,7 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -143,9 +144,17 @@
 
 /* Status LED pulse animation */
 @keyframes pulse-led {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
 }
+
 .led-pulse {
   animation: pulse-led 2s ease-in-out infinite;
 }
@@ -154,9 +163,11 @@
 .glow-cyan {
   box-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
 }
+
 .glow-green {
   box-shadow: 0 0 8px rgba(0, 200, 83, 0.3);
 }
+
 .glow-red {
   box-shadow: 0 0 8px rgba(255, 59, 79, 0.3);
 }
@@ -167,10 +178,8 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: repeating-linear-gradient(
-    transparent,
-    transparent 2px,
-    rgba(0, 0, 0, 0.03) 2px,
-    rgba(0, 0, 0, 0.03) 4px
-  );
+  background: repeating-linear-gradient(transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.03) 2px,
+      rgba(0, 0, 0, 0.03) 4px);
 }

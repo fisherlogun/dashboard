@@ -73,7 +73,7 @@ export function AppSidebar() {
           </div>
           <div className="flex flex-col">
             <span className="font-mono text-xs font-bold tracking-widest text-primary">NEXUS</span>
-            <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Control Center</span>
+            <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Web Dashboard</span>
           </div>
         </div>
       </SidebarHeader>

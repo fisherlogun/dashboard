@@ -11,7 +11,7 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] })
 const _jetbrains = JetBrains_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: 'NEXUS // Control Center',
+  title: 'Nexus Dashboard',
   description: 'Advanced Roblox game server command and control. Real-time telemetry, player management, and remote operations.',
 }
 
