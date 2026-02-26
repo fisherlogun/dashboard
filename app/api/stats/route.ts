@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { getLiveServers, getLivePlayers, getPlayerHistory, getBans, getActionLogs, getProject } from "@/lib/db"
+import { getLiveServers, getLivePlayers, getPlayerHistory, getBans, getActionLogs, getProject, addPlayerHistoryPoint } from "@/lib/db"
 import { getGameStats, getGameVotes, getFavoriteCount } from "@/lib/roblox"
 
 export async function GET(req: NextRequest) {
@@ -14,12 +14,12 @@ export async function GET(req: NextRequest) {
     const project = await getProject(projectId)
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
 
-    const [servers, players, history, bans, logsRes, gameStats, votes, favCount] = await Promise.all([
+    const [servers, players, history, bans, recentLogs, gameStats, votes, favCount] = await Promise.all([
       getLiveServers(projectId),
       getLivePlayers(projectId),
       getPlayerHistory(projectId, 60),
       getBans(projectId),
-      getActionLogs(projectId, 10, 0),
+      getActionLogs(projectId),
       getGameStats(project.universe_id).catch(() => null),
       getGameVotes(project.universe_id).catch(() => null),
       getFavoriteCount(project.universe_id).catch(() => 0),
@@ -27,6 +27,11 @@ export async function GET(req: NextRequest) {
 
     const activeBans = bans.filter((b: Record<string, unknown>) => b.active)
     const totalPlayers = servers.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.players as number) || 0), 0)
+
+    // If no live servers/players but last history point had players > 0, record a zero
+    if (totalPlayers === 0 && history.length > 0 && (history[0] as Record<string, unknown>).player_count !== 0) {
+      try { await addPlayerHistoryPoint(projectId, 0, 0) } catch { /* non-fatal */ }
+    }
     const totalCapacity = servers.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.max_players as number) || 0), 0)
     const avgFps = servers.length > 0 ? servers.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.fps as number) || 0), 0) / servers.length : 0
     const avgPing = servers.length > 0 ? servers.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.ping as number) || 0), 0) / servers.length : 0
@@ -39,7 +44,7 @@ export async function GET(req: NextRequest) {
       avgPing: Math.round(avgPing * 10) / 10,
       activeBans: activeBans.length,
       totalBans: bans.length,
-      recentLogs: logsRes.logs,
+      recentLogs: recentLogs.slice(0, 10),
       history: history.reverse(),
       game: gameStats ? {
         name: gameStats.name,

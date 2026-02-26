@@ -4,10 +4,14 @@ import { useState } from "react"
 import { useSession } from "@/components/session-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { DateTimePicker } from "@/components/date-time-picker"
 import {
   Users, Search, Shield, MessageSquare, XCircle, RefreshCw,
   AlertTriangle, Loader2, Clock, User2,
@@ -40,6 +44,9 @@ export default function PlayersPage() {
   const [actionType, setActionType] = useState<"kick" | "ban" | "warn" | "message" | null>(null)
   const [actionReason, setActionReason] = useState("")
   const [actionMessage, setActionMessage] = useState("")
+  const [banPrivateReason, setBanPrivateReason] = useState("")
+  const [banDuration, setBanDuration] = useState("1d")
+  const [banCustomDate, setBanCustomDate] = useState<Date | undefined>()
   const [acting, setActing] = useState(false)
 
   const players: Player[] = data?.players ?? []
@@ -52,24 +59,48 @@ export default function PlayersPage() {
     if (!activeProject || !actionTarget || !actionType) return
     setActing(true)
     try {
-      const res = await fetch("/api/players", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId: activeProject.id,
-          action: actionType,
-          targetUserId: actionTarget.user_id,
-          targetName: actionTarget.display_name,
-          reason: actionReason,
-          message: actionMessage,
-        }),
-      })
-      if (res.ok) {
-        toast.success(`${actionType.toUpperCase()} command sent for ${actionTarget.display_name}`)
-        mutate()
+      if (actionType === "ban") {
+        // Use the ban API with full options
+        let durationSeconds: number | null = null
+        let expiresAt: string | null = null
+        if (banDuration === "custom" && banCustomDate) {
+          durationSeconds = Math.max(0, Math.floor((banCustomDate.getTime() - Date.now()) / 1000))
+          expiresAt = banCustomDate.toISOString()
+        } else if (banDuration !== "permanent") {
+          const map: Record<string, number> = { "1h": 3600, "6h": 21600, "12h": 43200, "1d": 86400, "3d": 259200, "7d": 604800, "30d": 2592000 }
+          durationSeconds = map[banDuration] ?? null
+        }
+        const res = await fetch("/api/bans", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId: activeProject.id,
+            robloxUserId: actionTarget.user_id,
+            reason: actionReason || "No reason provided",
+            privateReason: banPrivateReason,
+            duration: banDuration,
+            durationSeconds,
+            expiresAt,
+          }),
+        })
+        if (res.ok) { toast.success(`${actionTarget.display_name} has been banned`); mutate() }
+        else { const d = await res.json(); toast.error(d.error || "Ban failed") }
       } else {
-        const d = await res.json()
-        toast.error(d.error || "Failed")
+        // kick, warn, message -- use player actions API
+        const res = await fetch("/api/players", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId: activeProject.id,
+            action: actionType,
+            targetUserId: actionTarget.user_id,
+            targetName: actionTarget.display_name,
+            reason: actionReason,
+            message: actionMessage,
+          }),
+        })
+        if (res.ok) { toast.success(`${actionType.toUpperCase()} sent for ${actionTarget.display_name}`); mutate() }
+        else { const d = await res.json(); toast.error(d.error || "Failed") }
       }
     } catch { toast.error("Network error") }
     finally {
@@ -78,6 +109,9 @@ export default function PlayersPage() {
       setActionType(null)
       setActionReason("")
       setActionMessage("")
+      setBanPrivateReason("")
+      setBanDuration("1d")
+      setBanCustomDate(undefined)
     }
   }
 
@@ -204,16 +238,45 @@ export default function PlayersPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3 py-2">
-            {(actionType === "kick" || actionType === "ban" || actionType === "warn") && (
-              <div>
-                <label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground block mb-1">Reason</label>
-                <Input value={actionReason} onChange={e => setActionReason(e.target.value)} placeholder="Enter reason..." className="font-mono text-xs" />
+            {actionType === "ban" && (
+              <>
+                <div className="space-y-1">
+                  <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Duration</Label>
+                  <Select value={banDuration} onValueChange={setBanDuration}>
+                    <SelectTrigger className="font-mono text-xs h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {["1h","6h","12h","1d","3d","7d","30d","permanent","custom"].map(d => (
+                        <SelectItem key={d} value={d} className="font-mono text-xs">{d.toUpperCase()}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {banDuration === "custom" && (
+                  <div className="space-y-1">
+                    <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Custom Expiry</Label>
+                    <DateTimePicker date={banCustomDate} onDateChange={setBanCustomDate} />
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Display Reason (player sees this)</Label>
+                  <Textarea value={actionReason} onChange={e => setActionReason(e.target.value)} placeholder="Reason shown to the player..." className="font-mono text-xs min-h-[60px] resize-none" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Private Reason (internal)</Label>
+                  <Input value={banPrivateReason} onChange={e => setBanPrivateReason(e.target.value)} placeholder="Internal notes..." className="font-mono text-xs h-8" />
+                </div>
+              </>
+            )}
+            {(actionType === "kick" || actionType === "warn") && (
+              <div className="space-y-1">
+                <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Reason</Label>
+                <Input value={actionReason} onChange={e => setActionReason(e.target.value)} placeholder="Enter reason..." className="font-mono text-xs h-8" />
               </div>
             )}
             {actionType === "message" && (
-              <div>
-                <label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground block mb-1">Message</label>
-                <Input value={actionMessage} onChange={e => setActionMessage(e.target.value)} placeholder="Enter message..." className="font-mono text-xs" />
+              <div className="space-y-1">
+                <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Message</Label>
+                <Input value={actionMessage} onChange={e => setActionMessage(e.target.value)} placeholder="Enter message..." className="font-mono text-xs h-8" />
               </div>
             )}
           </div>

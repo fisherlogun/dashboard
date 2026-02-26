@@ -54,10 +54,18 @@ export async function POST(req: NextRequest) {
         })
       }
     }
-    // Record a history point (throttled -- only insert if newest record is >25s old)
-    // This is a simple approach; the Lua script calls every 15s
+    // Record a history point -- throttled to max 1 per 30s per project
     try {
-      await addPlayerHistoryPoint(projectId, players ?? 0, 1)
+      const q = (await import("@/lib/neon")).sql()
+      const latest = await q`
+        SELECT recorded_at FROM player_history
+        WHERE project_id = ${projectId}
+        ORDER BY recorded_at DESC LIMIT 1
+      `
+      const lastTime = latest[0]?.recorded_at ? new Date(latest[0].recorded_at).getTime() : 0
+      if (Date.now() - lastTime > 30000) {
+        await addPlayerHistoryPoint(projectId, players ?? 0, 1)
+      }
     } catch {
       // Non-fatal
     }
