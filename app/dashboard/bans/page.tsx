@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useCallback } from "react"
 import { useSession } from "@/components/session-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { ShieldBan, Search, Loader2, Clock, Ban, ShieldOff } from "lucide-react"
+import { ShieldBan, Search, Loader2, Clock, Ban, ShieldOff, ChevronDown, ChevronUp } from "lucide-react"
 import { toast } from "sonner"
 import { DateTimePicker } from "@/components/date-time-picker"
 
@@ -30,6 +30,7 @@ export default function BansPage() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [search, setSearch] = useState("")
+  const [expandedBanId, setExpandedBanId] = useState<string | null>(null)
   const [userId, setUserId] = useState("")
   const [reason, setReason] = useState("")
   const [privateReason, setPrivateReason] = useState("")
@@ -43,8 +44,6 @@ export default function BansPage() {
       if (res.ok) { const d = await res.json(); setBans(d.bans ?? []) }
     } catch { /* */ } finally { setLoading(false) }
   }, [activeProject])
-
-  useEffect(() => { fetchBans() }, [fetchBans])
 
   const handleBan = async () => {
     if (!activeProject || !userId.trim() || !reason.trim()) { toast.error("User ID and reason required"); return }
@@ -75,6 +74,26 @@ export default function BansPage() {
       if (res.ok) { toast.success("Unbanned"); fetchBans() }
     } catch { toast.error("Failed") }
   }
+
+  const formatDuration = (duration: string, expiresAt: string | null) => {
+    if (duration === "permanent") return "PERMANENT"
+    if (duration === "custom" && expiresAt) {
+      const expiry = new Date(expiresAt)
+      return expiry.toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
+    }
+    const map: Record<string, string> = { "1h": "1H", "6h": "6H", "12h": "12H", "1d": "1D", "3d": "3D", "7d": "7D", "30d": "30D" }
+    return map[duration] || duration.toUpperCase()
+  }
+
+  const fetchBans2 = useCallback(async () => {
+    if (!activeProject) return
+    try {
+      const res = await fetch(`/api/bans?projectId=${activeProject.id}`)
+      if (res.ok) { const d = await res.json(); setBans(d.bans ?? []); setLoading(false) }
+    } catch { setLoading(false) }
+  }, [activeProject])
+
+  useState(() => { fetchBans2() }, [fetchBans2])
 
   const filtered = bans.filter((b) => b.roblox_user_id.includes(search) || b.reason.toLowerCase().includes(search.toLowerCase()))
   const active = filtered.filter((b) => b.active)
@@ -141,21 +160,49 @@ export default function BansPage() {
         <div className="space-y-1">
           {active.length === 0 && <p className="text-xs font-mono text-muted-foreground text-center py-8">NO_ACTIVE_BANS</p>}
           {active.map((ban) => (
-            <div key={ban.id} className="border border-border bg-card p-3 flex items-center justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-mono font-bold text-foreground">{ban.roblox_user_id}</span>
-                  <Badge variant="destructive" className="text-[10px] font-mono h-4">{ban.duration.toUpperCase()}</Badge>
+            <div key={ban.id}>
+              <button
+                onClick={() => setExpandedBanId(expandedBanId === ban.id ? null : ban.id)}
+                className="w-full border border-border bg-card p-3 flex items-center justify-between gap-3 hover:bg-card/80 transition-colors"
+              >
+                <div className="min-w-0 flex-1 text-left">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-mono font-bold text-foreground">{ban.roblox_user_id}</span>
+                    <Badge variant="destructive" className="text-[10px] font-mono h-4">{formatDuration(ban.duration, ban.expires_at)}</Badge>
+                  </div>
+                  <p className="text-[10px] font-mono text-muted-foreground truncate mt-0.5">{ban.reason}</p>
                 </div>
-                <p className="text-[10px] font-mono text-muted-foreground truncate mt-0.5">{ban.reason}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <Clock className="h-2.5 w-2.5 text-muted-foreground" />
-                  <span className="text-[10px] font-mono text-muted-foreground">{new Date(ban.created_at).toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })} by {ban.banned_by_name}</span>
+                {expandedBanId === ban.id ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
+              </button>
+              {expandedBanId === ban.id && (
+                <div className="border border-t-0 border-border bg-card/50 p-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                    <span className="text-muted-foreground">Issued:</span>
+                    <span className="text-foreground">{new Date(ban.created_at).toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</span>
+                    <span className="text-muted-foreground">Issued By:</span>
+                    <span className="text-foreground">{ban.banned_by_name}</span>
+                    {ban.expires_at && (
+                      <>
+                        <span className="text-muted-foreground">Expires:</span>
+                        <span className="text-foreground">{new Date(ban.expires_at).toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-mono text-muted-foreground">Display Reason:</span>
+                    <p className="text-[10px] font-mono text-foreground bg-background p-2 border border-border/50">{ban.reason}</p>
+                  </div>
+                  {ban.private_reason && (
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-mono text-muted-foreground">Private Reason:</span>
+                      <p className="text-[10px] font-mono text-foreground bg-background p-2 border border-border/50">{ban.private_reason}</p>
+                    </div>
+                  )}
+                  <Button variant="outline" size="sm" className="w-full font-mono text-[10px] h-6" onClick={() => handleUnban(ban.id)}>
+                    <ShieldOff className="h-3 w-3 mr-1" /> UNBAN
+                  </Button>
                 </div>
-              </div>
-              <Button variant="outline" size="sm" className="font-mono text-[10px] h-6 px-2 shrink-0" onClick={() => handleUnban(ban.id)}>
-                <ShieldOff className="h-3 w-3 mr-1" /> UNBAN
-              </Button>
+              )}
             </div>
           ))}
           {inactive.length > 0 && (

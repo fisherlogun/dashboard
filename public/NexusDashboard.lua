@@ -120,9 +120,13 @@ local function processCommand(data)
             if data.reason then
                 banMsg = banMsg .. ": " .. data.reason
             end
-            if data.duration and data.duration ~= "permanent" then
+            if data.expiresAt then
+                -- Format expiry date properly
+                local expiryDate = data.expiresAt
+                banMsg = banMsg .. "\nExpires: " .. expiryDate
+            elseif data.duration and data.duration ~= "permanent" and data.duration ~= "custom" then
                 banMsg = banMsg .. " (Duration: " .. data.duration .. ")"
-            else
+            elseif data.duration == "permanent" then
                 banMsg = banMsg .. " (Permanent)"
             end
             player:Kick(banMsg)

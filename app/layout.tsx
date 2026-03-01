@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { SessionProvider } from '@/components/session-provider'
+import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from 'sonner'
 import './globals.css'
 
@@ -25,11 +26,13 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased bg-background text-foreground">
-        <SessionProvider>
-          {children}
-        </SessionProvider>
+        <ThemeProvider attribute="class" defaultTheme="dark" storageKey="nexus-theme">
+          <SessionProvider>
+            {children}
+          </SessionProvider>
+        </ThemeProvider>
         <Toaster
           richColors
           position="top-right"

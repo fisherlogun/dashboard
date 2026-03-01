@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useTheme } from "next-themes"
 import { useSession } from "@/components/session-provider"
 import {
   Sidebar,
@@ -36,6 +37,8 @@ import {
   Plus,
   Radio,
   Database,
+  Moon,
+  Sun,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -59,6 +62,7 @@ const adminNav = [
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const { theme, setTheme } = useTheme()
   const { user, projects, activeProject, setActiveProject, logout } = useSession()
 
   const isActive = (url: string) =>
@@ -209,7 +213,15 @@ export function AppSidebar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-border px-3 py-3">
+      <SidebarFooter className="border-t border-border px-3 py-3 space-y-3">
+        <div className="flex items-center gap-1">
+          <button onClick={() => setTheme("light")} className={cn("p-1.5 text-xs flex items-center justify-center border transition-colors", theme === "light" ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground")}>
+            <Sun className="h-3 w-3" />
+          </button>
+          <button onClick={() => setTheme("dark")} className={cn("p-1.5 text-xs flex items-center justify-center border transition-colors", theme === "dark" ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground")}>
+            <Moon className="h-3 w-3" />
+          </button>
+        </div>
         {user && (
           <div className="flex items-center gap-3">
             <div className="relative">

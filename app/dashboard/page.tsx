@@ -34,7 +34,7 @@ function MiniChart({ data }: { data: { player_count: number; recorded_at: string
     return <div className="h-40 flex items-center justify-center text-muted-foreground font-mono text-xs">Awaiting telemetry data...</div>
   }
   const chartData = data.map(d => ({
-    time: new Date(d.recorded_at).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" }),
+    time: new Date(d.recorded_at).toLocaleString("en-US", { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }),
     players: d.player_count,
     servers: d.server_count,
   }))

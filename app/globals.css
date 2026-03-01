@@ -48,6 +48,45 @@
   --warning-foreground: #0a0e17;
 }
 
+.light {
+  --background: #f5f7fa;
+  --foreground: #1a1f2e;
+  --card: #ffffff;
+  --card-foreground: #1a1f2e;
+  --popover: #ffffff;
+  --popover-foreground: #1a1f2e;
+  --primary: #0099cc;
+  --primary-foreground: #ffffff;
+  --secondary: #e8ecf1;
+  --secondary-foreground: #4a5f7f;
+  --muted: #e8ecf1;
+  --muted-foreground: #6b7a8f;
+  --accent: #f0f4f8;
+  --accent-foreground: #1a1f2e;
+  --destructive: #cc3333;
+  --destructive-foreground: #ffffff;
+  --border: #d1d9e3;
+  --input: #e8ecf1;
+  --ring: #0099cc;
+  --chart-1: #0099cc;
+  --chart-2: #009900;
+  --chart-3: #ff9900;
+  --chart-4: #6633cc;
+  --chart-5: #cc3333;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1a1f2e;
+  --sidebar-primary: #0099cc;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e8ecf1;
+  --sidebar-accent-foreground: #1a1f2e;
+  --sidebar-border: #d1d9e3;
+  --sidebar-ring: #0099cc;
+  --success: #009900;
+  --success-foreground: #ffffff;
+  --warning: #ff9900;
+  --warning-foreground: #ffffff;
+}
+
 .dark {
   --background: #0a0e17;
   --foreground: #c8d6e5;
