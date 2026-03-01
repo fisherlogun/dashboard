@@ -314,10 +314,17 @@ export async function getPlayersInServer(projectId: string, serverId: string) {
 
 export async function addPlayerHistoryPoint(projectId: string, playerCount: number, serverCount: number) {
   const q = sql()
-  await q`
-    INSERT INTO player_history (project_id, player_count, server_count)
-    VALUES (${projectId}, ${playerCount}, ${serverCount})
-  `
+  await q`INSERT INTO player_history (project_id, player_count, server_count) VALUES (${projectId}, ${playerCount}, ${serverCount})`
+}
+
+export async function getPlayerHistory(projectId: string, minutes: number = 180) {
+  const q = sql()
+  return q`SELECT * FROM player_history WHERE project_id = ${projectId} AND recorded_at > NOW() - INTERVAL '${minutes} minutes' ORDER BY recorded_at DESC`
+}
+
+export async function cleanupOldPlayerHistory(projectId: string, keepMinutes: number = 180) {
+  const q = sql()
+  await q`DELETE FROM player_history WHERE project_id = ${projectId} AND recorded_at < NOW() - INTERVAL '${keepMinutes} minutes'`
 }
 
 export async function getPlayerHistory(projectId: string, limit = 60) {

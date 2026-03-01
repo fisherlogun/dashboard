@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { getLiveServers, getLivePlayers, getPlayerHistory, getBans, getActionLogs, getProject, addPlayerHistoryPoint } from "@/lib/db"
-import { getGameStats, getGameVotes, getFavoriteCount } from "@/lib/roblox"
+import { getLiveServers, getLivePlayers, getPlayerHistory, getBans, getActionLogs, getProject, addPlayerHistoryPoint, cleanupOldPlayerHistory } from "@/lib/db"
+import { getGameStats, getGameVotes, getFavoriteCount, getGameThumbnail } from "@/lib/roblox"
 
 export async function GET(req: NextRequest) {
   const session = await getSession()
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     const project = await getProject(projectId)
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
 
-    const [servers, players, history, bans, recentLogs, gameStats, votes, favCount] = await Promise.all([
+    const [servers, players, history, bans, recentLogs, gameStats, votes, favCount, thumbnail] = await Promise.all([
       getLiveServers(projectId),
       getLivePlayers(projectId),
       getPlayerHistory(projectId, 180),
@@ -23,7 +23,11 @@ export async function GET(req: NextRequest) {
       getGameStats(project.universe_id).catch(() => null),
       getGameVotes(project.universe_id).catch(() => null),
       getFavoriteCount(project.universe_id).catch(() => 0),
+      getGameThumbnail(project.universe_id).catch(() => null),
     ])
+
+    // Clean up old data (keep only last 3 hours)
+    try { await cleanupOldPlayerHistory(projectId, 180) } catch { /* non-fatal */ }
 
     const activeBans = bans.filter((b: Record<string, unknown>) => b.active)
     const totalPlayers = servers.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.players as number) || 0), 0)
@@ -54,6 +58,7 @@ export async function GET(req: NextRequest) {
         upVotes: votes?.upVotes ?? 0,
         downVotes: votes?.downVotes ?? 0,
         maxPlayers: gameStats.maxPlayers,
+        thumbnail: thumbnail?.imageUrl ?? null,
       } : null,
     })
   } catch (error) {
