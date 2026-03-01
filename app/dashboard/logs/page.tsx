@@ -74,7 +74,7 @@ export default function LogsPage() {
                 </div>
                 <div className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground">
                   <Clock className="h-2.5 w-2.5" />
-                  {new Date(log.created_at).toLocaleString()}
+                  {new Date(log.created_at).toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
                 </div>
               </div>
               <p className="text-[10px] font-mono text-muted-foreground mt-1 truncate">{log.details}</p>

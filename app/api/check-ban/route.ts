@@ -29,7 +29,10 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    return NextResponse.json({ banned: false })
+    // Check if user was previously banned but is now unbanned
+    const inactiveBan = bans.find((b: { roblox_user_id: string; active: boolean }) => b.roblox_user_id === userId && !b.active)
+
+    return NextResponse.json({ banned: false, wasUnbanned: !!inactiveBan })
   } catch (error) {
     console.error("Check-ban error:", error)
     return NextResponse.json({ error: "Internal error" }, { status: 500 })

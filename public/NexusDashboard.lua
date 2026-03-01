@@ -191,16 +191,20 @@ Players.PlayerAdded:Connect(function(player)
         return HttpService:JSONDecode(response.Body)
     end)
 
-    if success and result and result.banned then
-        local kickMsg = "You are banned from this game"
-        if result.reason then
-            kickMsg = kickMsg .. ": " .. result.reason
+    if success and result then
+        if result.banned then
+            local kickMsg = "You are banned from this game"
+            if result.reason then
+                kickMsg = kickMsg .. ": " .. result.reason
+            end
+            if result.expiresAt then
+                kickMsg = kickMsg .. "\nExpires: " .. result.expiresAt
+            end
+            player:Kick(kickMsg)
+            print("[Nexus] Banned player blocked:", player.Name)
+        elseif result.wasUnbanned then
+            print("[Nexus] unbanned -", player.Name, "(" .. player.UserId .. ")")
         end
-        if result.expiresAt then
-            kickMsg = kickMsg .. "\nExpires: " .. result.expiresAt
-        end
-        player:Kick(kickMsg)
-        print("[Nexus] Banned player blocked:", player.Name)
     end
 end)
 

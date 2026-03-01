@@ -243,7 +243,7 @@ export default function DashboardPage() {
                   <span className="font-mono text-[10px] text-foreground block truncate">{log.action as string}</span>
                   <span className="font-mono text-[9px] text-muted-foreground block truncate">{log.details as string}</span>
                   <span className="font-mono text-[9px] text-muted-foreground/50">
-                    {log.created_at ? new Date(log.created_at as string).toLocaleTimeString("en-US", { hour12: false }) : ""}
+                    {log.created_at ? new Date(log.created_at as string).toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : ""}
                   </span>
                 </div>
               </div>

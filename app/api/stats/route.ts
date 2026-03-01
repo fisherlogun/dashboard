@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const [servers, players, history, bans, recentLogs, gameStats, votes, favCount] = await Promise.all([
       getLiveServers(projectId),
       getLivePlayers(projectId),
-      getPlayerHistory(projectId, 60),
+      getPlayerHistory(projectId, 180),
       getBans(projectId),
       getActionLogs(projectId),
       getGameStats(project.universe_id).catch(() => null),

@@ -150,7 +150,7 @@ export default function BansPage() {
                 <p className="text-[10px] font-mono text-muted-foreground truncate mt-0.5">{ban.reason}</p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <Clock className="h-2.5 w-2.5 text-muted-foreground" />
-                  <span className="text-[10px] font-mono text-muted-foreground">{new Date(ban.created_at).toLocaleString()} by {ban.banned_by_name}</span>
+                  <span className="text-[10px] font-mono text-muted-foreground">{new Date(ban.created_at).toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })} by {ban.banned_by_name}</span>
                 </div>
               </div>
               <Button variant="outline" size="sm" className="font-mono text-[10px] h-6 px-2 shrink-0" onClick={() => handleUnban(ban.id)}>
