@@ -327,16 +327,6 @@ export async function cleanupOldPlayerHistory(projectId: string, keepMinutes: nu
   await q`DELETE FROM player_history WHERE project_id = ${projectId} AND recorded_at < NOW() - INTERVAL '${keepMinutes} minutes'`
 }
 
-export async function getPlayerHistory(projectId: string, limit = 60) {
-  const q = sql()
-  return q`
-    SELECT player_count, server_count, recorded_at FROM player_history
-    WHERE project_id = ${projectId}
-    ORDER BY recorded_at DESC
-    LIMIT ${limit}
-  `
-}
-
 // ---------- Global Admin ----------
 
 export function isGlobalAdmin(userId: string): boolean {
