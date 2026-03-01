@@ -181,7 +181,7 @@ MessagingService:SubscribeAsync("DashboardCommands", function(message)
 end)
 
 ---------------------------------------------------------------------------
--- BAN CHECK: Check if a player is banned when they join
+-- BAN CHECK: Check if a player is banned when they joinz
 ---------------------------------------------------------------------------
 Players.PlayerAdded:Connect(function(player)
     local success, result = pcall(function()
