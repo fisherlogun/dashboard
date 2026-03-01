@@ -191,7 +191,9 @@ export default function DashboardPage() {
           <span className="font-mono text-[10px] text-muted-foreground">{stats.history.length} data points</span>
         </div>
         {!stats.history || stats.history.length === 0 ? (
-          <div className="h-40 flex items-center justify-center text-muted-foreground font-mono text-xs">Awaiting telemetry data...</div>
+          <div className="h-40 flex items-center justify-center text-muted-foreground font-mono text-xs">
+            {isLoading ? "Loading telemetry..." : "NO_TELEMETRY_DATA"}
+          </div>
         ) : (
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={stats.history.reverse()}>
@@ -232,10 +234,10 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Recent Activity */}
+      {/* Join Logs */}
       <div className="border border-border bg-card p-4 space-y-3">
         <h2 className="text-xs font-mono font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-          <Activity className="h-3 w-3 text-primary" /> RECENT ACTIVITY
+          <Activity className="h-3 w-3 text-primary" /> JOIN LOGS
         </h2>
         <div className="space-y-1">
           {!stats.recentLogs || stats.recentLogs.length === 0 ? (

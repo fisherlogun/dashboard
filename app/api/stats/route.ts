@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
 import { getLiveServers, getLivePlayers, getPlayerHistory, getBans, getActionLogs, getProject, addPlayerHistoryPoint, cleanupOldPlayerHistory } from "@/lib/db"
-import { getGameStats, getGameVotes, getFavoriteCount, getGameThumbnail } from "@/lib/roblox"
+import { getGameStats, getGameVotes, getFavoriteCount } from "@/lib/roblox"
 
 export async function GET(req: NextRequest) {
   const session = await getSession()
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     const project = await getProject(projectId)
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
 
-    const [servers, players, history, bans, recentLogs, gameStats, votes, favCount, thumbnail] = await Promise.all([
+    const [servers, players, history, bans, recentLogs, gameStats, votes, favCount] = await Promise.all([
       getLiveServers(projectId).catch(() => []),
       getLivePlayers(projectId).catch(() => []),
       getPlayerHistory(projectId, 180).catch(() => []),
@@ -23,7 +23,6 @@ export async function GET(req: NextRequest) {
       getGameStats(project.universe_id).catch(() => null),
       getGameVotes(project.universe_id).catch(() => null),
       getFavoriteCount(project.universe_id).catch(() => 0),
-      getGameThumbnail(project.universe_id).catch(() => null),
     ])
 
     // Clean up old data (keep only last 3 hours)
@@ -58,7 +57,7 @@ export async function GET(req: NextRequest) {
         upVotes: votes?.upVotes ?? 0,
         downVotes: votes?.downVotes ?? 0,
         maxPlayers: gameStats.maxPlayers,
-        thumbnail: thumbnail?.imageUrl ?? null,
+        thumbnail: `https://thumbnails.roblox.com/v1/games/icons?gameIds=${project.universe_id}&size=512x512&format=Png`,
       } : null,
     })
   } catch (error) {
