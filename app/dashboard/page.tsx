@@ -99,6 +99,9 @@ export default function DashboardPage() {
   }
 
   const stats = data || { servers: 0, players: 0, totalCapacity: 0, avgFps: 0, avgPing: 0, activeBans: 0, totalBans: 0, recentLogs: [], history: [], game: null }
+  
+  const avgFps = stats.avgFps ?? 0
+  const avgPing = stats.avgPing ?? 0
 
   return (
     <div className="space-y-4">
@@ -166,11 +169,11 @@ export default function DashboardPage() {
           </div>
           <div className="border border-primary/30 bg-primary/5 px-3 py-2">
             <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">AVG FPS</div>
-            <div className={`text-lg font-mono font-bold mt-1 ${stats.avgFps >= 50 ? 'text-success' : stats.avgFps >= 30 ? 'text-warning' : 'text-destructive'}`}>{stats.avgFps.toFixed(1)}</div>
+            <div className={`text-lg font-mono font-bold mt-1 ${avgFps >= 50 ? 'text-success' : avgFps >= 30 ? 'text-warning' : 'text-destructive'}`}>{avgFps.toFixed(1)}</div>
           </div>
           <div className="border border-primary/30 bg-primary/5 px-3 py-2">
             <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">AVG PING</div>
-            <div className={`text-lg font-mono font-bold mt-1 ${stats.avgPing < 50 ? 'text-success' : stats.avgPing < 150 ? 'text-warning' : 'text-destructive'}`}>{Math.round(stats.avgPing)}ms</div>
+            <div className={`text-lg font-mono font-bold mt-1 ${avgPing < 50 ? 'text-success' : avgPing < 150 ? 'text-warning' : 'text-destructive'}`}>{Math.round(avgPing)}ms</div>
           </div>
           <div className="border border-destructive/30 bg-destructive/5 px-3 py-2">
             <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">BANS</div>

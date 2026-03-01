@@ -15,11 +15,11 @@ export async function GET(req: NextRequest) {
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
 
     const [servers, players, history, bans, recentLogs, gameStats, votes, favCount, thumbnail] = await Promise.all([
-      getLiveServers(projectId),
-      getLivePlayers(projectId),
-      getPlayerHistory(projectId, 180),
-      getBans(projectId),
-      getActionLogs(projectId),
+      getLiveServers(projectId).catch(() => []),
+      getLivePlayers(projectId).catch(() => []),
+      getPlayerHistory(projectId, 180).catch(() => []),
+      getBans(projectId).catch(() => []),
+      getActionLogs(projectId).catch(() => []),
       getGameStats(project.universe_id).catch(() => null),
       getGameVotes(project.universe_id).catch(() => null),
       getFavoriteCount(project.universe_id).catch(() => 0),
