@@ -7,8 +7,7 @@ import {
   type SessionData,
 } from "@/lib/auth"
 import { exchangeCodeForTokens, getUserInfo } from "@/lib/roblox"
-import { getUserRole, setUserRole, getAllRoles, isSetupComplete } from "@/lib/db"
-import { isLicensed, isGlobalAdmin } from "@/lib/admin"
+import { upsertUser, isGlobalAdmin, isLicensed, grantLicense } from "@/lib/db"
 
 function getBaseUrl(request: NextRequest): string {
   if (process.env.NEXT_PUBLIC_BASE_URL) return process.env.NEXT_PUBLIC_BASE_URL
@@ -25,96 +24,55 @@ export async function GET(request: NextRequest) {
     const state = searchParams.get("state")
     const error = searchParams.get("error")
 
-    if (error) {
-      return NextResponse.redirect(
-        new URL(`/login?error=${error}`, baseUrl)
-      )
-    }
+    if (error) return NextResponse.redirect(new URL(`/login?error=${error}`, baseUrl))
+    if (!code || !state) return NextResponse.redirect(new URL("/login?error=missing_params", baseUrl))
 
-    if (!code || !state) {
-      return NextResponse.redirect(
-        new URL("/login?error=missing_params", baseUrl)
-      )
-    }
-
-    // Verify state
     const savedState = await getStateCookie()
-    if (state !== savedState) {
-      return NextResponse.redirect(
-        new URL("/login?error=state_mismatch", baseUrl)
-      )
-    }
+    if (state !== savedState) return NextResponse.redirect(new URL("/login?error=state_mismatch", baseUrl))
 
-    // Get PKCE verifier
     const codeVerifier = await getPKCECookie()
-    if (!codeVerifier) {
-      return NextResponse.redirect(
-        new URL("/login?error=missing_pkce", baseUrl)
-      )
-    }
+    if (!codeVerifier) return NextResponse.redirect(new URL("/login?error=missing_pkce", baseUrl))
 
-    // Exchange code for tokens
-    const tokens = await exchangeCodeForTokens(
-      code,
-      codeVerifier,
-      `${baseUrl}/api/auth/callback`
-    )
-
-    // Get user info
+    const tokens = await exchangeCodeForTokens(code, codeVerifier, `${baseUrl}/api/auth/callback`)
     const userInfo = await getUserInfo(tokens.access_token)
 
-    // Check license - global admin always allowed, otherwise must be licensed
     const userId = userInfo.sub
     const isAdmin = isGlobalAdmin(userId)
 
-    if (!isAdmin) {
+    // Upsert user in Neon DB
+    await upsertUser({
+      id: userId,
+      displayName: userInfo.name || userInfo.preferred_username,
+      avatarUrl: userInfo.picture || "",
+      profileUrl: userInfo.profile || "",
+    })
+
+    // Auto-grant license to global admin
+    if (isAdmin) {
+      await grantLicense(userId, "system", "System (Auto)")
+    } else {
       const licensed = await isLicensed(userId)
       if (!licensed) {
-        return NextResponse.redirect(
-          new URL("/unauthorized", baseUrl)
-        )
+        return NextResponse.redirect(new URL("/unauthorized", baseUrl))
       }
     }
 
-    // Determine role - first user becomes owner
-    let existingRole = getUserRole(userInfo.sub)
-    if (!existingRole) {
-      const allRoles = getAllRoles()
-      const role = allRoles.length === 0 ? "owner" : "moderator"
-      existingRole = {
-        userId: userInfo.sub,
-        displayName: userInfo.name || userInfo.preferred_username,
-        role,
-      }
-      setUserRole(existingRole)
-    }
-
-    // Create session
     const sessionData: SessionData = {
-      userId: userInfo.sub,
+      userId,
       displayName: userInfo.name || userInfo.preferred_username,
       profileUrl: userInfo.profile || "",
       avatarUrl: userInfo.picture || "",
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
-      role: existingRole.role,
-      setupComplete: isSetupComplete(),
       expiresAt: Date.now() + tokens.expires_in * 1000,
     }
 
     const sessionToken = await createSession(sessionData)
     await setSessionCookie(sessionToken)
 
-    // Redirect based on setup status
-    if (!isSetupComplete() && existingRole.role === "owner") {
-      return NextResponse.redirect(new URL("/setup", baseUrl))
-    }
-
     return NextResponse.redirect(new URL("/dashboard", baseUrl))
   } catch (error) {
     console.error("Callback error:", error)
-    return NextResponse.redirect(
-      new URL("/login?error=callback_failed", getBaseUrl(request))
-    )
+    return NextResponse.redirect(new URL("/login?error=callback_failed", getBaseUrl(request)))
   }
 }

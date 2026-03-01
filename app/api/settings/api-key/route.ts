@@ -1,62 +1,29 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { getConfig, updateConfig, addActionLog } from "@/lib/db"
-import { hasPermission } from "@/lib/roles"
-import { z } from "zod"
+import { getProjectById, getProjectMember, updateProject, addActionLog } from "@/lib/db"
 
-const rotateSchema = z.object({
-  newApiKey: z.string().min(10, "API key must be at least 10 characters"),
-})
-
-export async function PATCH(request: NextRequest) {
+export async function PATCH(req: NextRequest) {
   try {
     const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const { projectId, newApiKey } = await req.json()
+    if (!projectId || !newApiKey) return NextResponse.json({ error: "Missing fields" }, { status: 400 })
+
+    const member = await getProjectMember(projectId, session.userId)
+    if (!member || member.role !== "owner") {
+      return NextResponse.json({ error: "Only the owner can rotate API keys" }, { status: 403 })
     }
 
-    if (!hasPermission(session.role, "manage_api_key")) {
-      return NextResponse.json(
-        { error: "Only the owner can manage API keys" },
-        { status: 403 }
-      )
-    }
+    const project = await getProjectById(projectId)
+    if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
 
-    const config = getConfig()
-    if (!config) {
-      return NextResponse.json(
-        { error: "Setup not complete" },
-        { status: 400 }
-      )
-    }
-
-    const body = await request.json()
-    const parsed = rotateSchema.safeParse(body)
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid input", details: parsed.error.flatten() },
-        { status: 400 }
-      )
-    }
-
-    updateConfig({ apiKey: parsed.data.newApiKey })
-
-    const ip = request.headers.get("x-forwarded-for") || "unknown"
-    addActionLog({
-      userId: session.userId,
-      userName: session.displayName,
-      action: "api_key_rotated",
-      details: "API key was rotated",
-      ip,
-      status: "success",
-    })
+    await updateProject(projectId, { apiKey: newApiKey })
+    await addActionLog(projectId, session.userId, session.displayName, "api_key_rotated", "API key was rotated")
 
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("API key error:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to update API key" }, { status: 500 })
   }
 }

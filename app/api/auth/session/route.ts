@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { isSetupComplete } from "@/lib/db"
-import { isGlobalAdmin } from "@/lib/admin"
+import { isGlobalAdmin } from "@/lib/db"
 
 export async function GET() {
   const session = await getSession()
@@ -15,8 +14,6 @@ export async function GET() {
       displayName: session.displayName,
       profileUrl: session.profileUrl,
       avatarUrl: session.avatarUrl,
-      role: session.role,
-      setupComplete: isSetupComplete(),
       isGlobalAdmin: isGlobalAdmin(session.userId),
     },
   })

@@ -5,13 +5,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
   Select,
@@ -32,10 +25,14 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import useSWR from "swr"
+import { useSession } from "@/components/session-provider"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function DatastoresPage() {
+  const { activeProject } = useSession()
+  const pid = activeProject?.id
+
   const [selectedStore, setSelectedStore] = useState<string | null>(null)
   const [scope, setScope] = useState("global")
   const [key, setKey] = useState("")
@@ -43,27 +40,24 @@ export default function DatastoresPage() {
   const [loadingEntry, setLoadingEntry] = useState(false)
   const [saving, setSaving] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
-
-  // Key listing state
   const [keys, setKeys] = useState<string[]>([])
   const [loadingKeys, setLoadingKeys] = useState(false)
   const [keysLoaded, setKeysLoaded] = useState(false)
 
   const { data: storesData, isLoading: storesLoading, mutate: refreshStores } = useSWR(
-    "/api/datastores?action=list",
+    pid ? `/api/datastores?action=list&projectId=${pid}` : null,
     fetcher
   )
 
   const datastores: { name: string }[] = storesData?.datastores ?? []
 
-  // Fetch keys when store or scope changes
   const fetchKeys = useCallback(async () => {
-    if (!selectedStore) return
+    if (!selectedStore || !pid) return
     setLoadingKeys(true)
     setKeysLoaded(false)
     try {
       const res = await fetch(
-        `/api/datastores?action=keys&name=${encodeURIComponent(selectedStore)}&scope=${encodeURIComponent(scope)}`
+        `/api/datastores?action=keys&projectId=${pid}&name=${encodeURIComponent(selectedStore)}&scope=${encodeURIComponent(scope)}`
       )
       const json = await res.json()
       if (res.ok) {
@@ -75,25 +69,22 @@ export default function DatastoresPage() {
       }
     } catch {
       setKeys([])
-      toast.error("Network error fetching keys")
     } finally {
       setLoadingKeys(false)
     }
-  }, [selectedStore, scope])
+  }, [selectedStore, scope, pid])
 
   useEffect(() => {
-    if (selectedStore) {
-      fetchKeys()
-    }
+    if (selectedStore) fetchKeys()
   }, [selectedStore, scope, fetchKeys])
 
   const lookupEntry = useCallback(async () => {
-    if (!selectedStore || !key) return
+    if (!selectedStore || !key || !pid) return
     setLoadingEntry(true)
     setHasLoaded(false)
     try {
       const res = await fetch(
-        `/api/datastores?action=get&name=${encodeURIComponent(selectedStore)}&scope=${encodeURIComponent(scope)}&key=${encodeURIComponent(key)}`
+        `/api/datastores?action=get&projectId=${pid}&name=${encodeURIComponent(selectedStore)}&scope=${encodeURIComponent(scope)}&key=${encodeURIComponent(key)}`
       )
       const json = await res.json()
       if (res.ok) {
@@ -108,37 +99,22 @@ export default function DatastoresPage() {
     } finally {
       setLoadingEntry(false)
     }
-  }, [selectedStore, scope, key])
+  }, [selectedStore, scope, key, pid])
 
   const saveEntry = async () => {
-    if (!selectedStore || !key) return
+    if (!selectedStore || !key || !pid) return
     setSaving(true)
     try {
       let parsedData: unknown
-      try {
-        parsedData = JSON.parse(entryData)
-      } catch {
-        toast.error("Invalid JSON data")
-        setSaving(false)
-        return
-      }
+      try { parsedData = JSON.parse(entryData) } catch { toast.error("Invalid JSON"); setSaving(false); return }
 
       const res = await fetch("/api/datastores", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: selectedStore,
-          scope,
-          key,
-          data: parsedData,
-        }),
+        body: JSON.stringify({ projectId: pid, name: selectedStore, scope, key, data: parsedData }),
       })
-      const json = await res.json()
-      if (res.ok) {
-        toast.success("Entry saved successfully")
-      } else {
-        toast.error(json.error || "Save failed")
-      }
+      if (res.ok) toast.success("Entry saved")
+      else toast.error((await res.json()).error || "Save failed")
     } catch {
       toast.error("Network error")
     } finally {
@@ -146,221 +122,99 @@ export default function DatastoresPage() {
     }
   }
 
+  if (!pid) {
+    return (
+      <div className="flex items-center justify-center h-64 text-muted-foreground font-mono text-sm">
+        Select a project to manage datastores
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-3">
+    <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-3">
         {/* Datastore List */}
-        <Card className="border-border/50">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2 text-card-foreground">
-                <Database className="h-4 w-4 text-primary" />
-                Datastores
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => refreshStores()}
-                className="h-7 w-7 p-0"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                <span className="sr-only">Refresh</span>
-              </Button>
+        <div className="border border-border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <Database className="h-3 w-3 text-primary" /> Datastores
+            </h3>
+            <Button variant="ghost" size="sm" onClick={() => refreshStores()} className="h-6 w-6 p-0">
+              <RefreshCw className="h-3 w-3" />
+            </Button>
+          </div>
+          {storesLoading ? (
+            <div className="flex items-center justify-center py-8"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+          ) : datastores.length === 0 ? (
+            <p className="py-6 text-center text-xs text-muted-foreground font-mono">No datastores found</p>
+          ) : (
+            <div className="space-y-0.5 max-h-96 overflow-auto">
+              {datastores.map((ds) => (
+                <button
+                  key={ds.name}
+                  onClick={() => { setSelectedStore(ds.name); setEntryData(""); setHasLoaded(false); setKey("") }}
+                  className={`flex w-full items-center justify-between px-2 py-1.5 text-left text-xs font-mono transition-colors ${
+                    selectedStore === ds.name ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted/30"
+                  }`}
+                >
+                  <span className="truncate">{ds.name}</span>
+                  {selectedStore === ds.name && <ChevronRight className="h-3 w-3 shrink-0" />}
+                </button>
+              ))}
             </div>
-            <CardDescription>
-              Select a datastore to browse entries.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {storesLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : datastores.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                No datastores found. Make sure your API key has DataStore permissions.
-              </p>
-            ) : (
-              <div className="space-y-1 max-h-96 overflow-auto">
-                {datastores.map((ds) => (
-                  <button
-                    key={ds.name}
-                    onClick={() => {
-                      setSelectedStore(ds.name)
-                      setEntryData("")
-                      setHasLoaded(false)
-                      setKey("")
-                    }}
-                    className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors ${
-                      selectedStore === ds.name
-                        ? "bg-primary/10 text-primary"
-                        : "text-foreground hover:bg-accent"
-                    }`}
-                  >
-                    <span className="font-mono text-xs truncate">{ds.name}</span>
-                    {selectedStore === ds.name && (
-                      <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          )}
+        </div>
 
         {/* Entry Editor */}
-        <Card className="border-border/50 lg:col-span-2">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base text-card-foreground">
-              {selectedStore ? (
-                <span className="flex items-center gap-2">
-                  Entry Editor
-                  <Badge variant="outline" className="font-mono text-xs">
-                    {selectedStore}
-                  </Badge>
-                </span>
-              ) : (
-                "Entry Editor"
-              )}
-            </CardTitle>
-            <CardDescription>
-              Look up and edit datastore entries by scope and key.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-foreground">Scope</Label>
-                <Input
-                  value={scope}
-                  onChange={(e) => setScope(e.target.value)}
-                  placeholder="global"
-                  className="font-mono text-sm"
-                  disabled={!selectedStore}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-foreground">Entry Key</Label>
-                {keysLoaded && keys.length > 0 ? (
-                  <Select
-                    value={key}
-                    onValueChange={(v) => {
-                      if (v === "__custom__") {
-                        setKey("")
-                      } else {
-                        setKey(v)
-                      }
-                    }}
-                    disabled={!selectedStore}
-                  >
-                    <SelectTrigger className="font-mono text-sm">
-                      <SelectValue placeholder="Select a key..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {keys.map((k) => (
-                        <SelectItem key={k} value={k}>
-                          <span className="font-mono text-xs">{k}</span>
-                        </SelectItem>
-                      ))}
-                      <SelectItem value="__custom__">
-                        <span className="text-xs text-muted-foreground">Enter custom key...</span>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    value={key}
-                    onChange={(e) => setKey(e.target.value)}
-                    placeholder="Player_123456789"
-                    className="font-mono text-sm"
-                    disabled={!selectedStore}
-                  />
-                )}
-              </div>
+        <div className="border border-border bg-card p-4 space-y-4 lg:col-span-2">
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Entry Editor</h3>
+            {selectedStore && <Badge variant="outline" className="font-mono text-[10px]">{selectedStore}</Badge>}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Scope</Label>
+              <Input value={scope} onChange={(e) => setScope(e.target.value)} placeholder="global" className="font-mono text-xs h-8" disabled={!selectedStore} />
             </div>
-
-            {/* Manual key input when "custom" is selected */}
-            {keysLoaded && keys.length > 0 && key === "" && (
-              <div className="space-y-1.5">
-                <Label className="text-xs text-foreground">Custom Key</Label>
-                <Input
-                  value={key}
-                  onChange={(e) => setKey(e.target.value)}
-                  placeholder="Enter a custom key..."
-                  className="font-mono text-sm"
-                />
-              </div>
-            )}
-
-            {/* Keys info */}
-            {selectedStore && (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Key className="h-3 w-3" />
-                  {loadingKeys ? (
-                    "Loading keys..."
-                  ) : keysLoaded ? (
-                    `${keys.length} key${keys.length !== 1 ? "s" : ""} in scope "${scope}"`
-                  ) : (
-                    "Keys not loaded"
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={fetchKeys}
-                  disabled={loadingKeys}
-                  className="h-6 gap-1 text-xs px-2"
-                >
-                  {loadingKeys ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <List className="h-3 w-3" />
-                  )}
-                  Refresh Keys
-                </Button>
-              </div>
-            )}
-
-            <Button
-              variant="outline"
-              className="w-full gap-2"
-              onClick={lookupEntry}
-              disabled={!selectedStore || !key || loadingEntry}
-            >
-              {loadingEntry ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Key</Label>
+              {keysLoaded && keys.length > 0 ? (
+                <Select value={key} onValueChange={(v) => setKey(v === "__custom__" ? "" : v)} disabled={!selectedStore}>
+                  <SelectTrigger className="font-mono text-xs h-8"><SelectValue placeholder="Select key..." /></SelectTrigger>
+                  <SelectContent>
+                    {keys.map((k) => <SelectItem key={k} value={k}><span className="font-mono text-xs">{k}</span></SelectItem>)}
+                    <SelectItem value="__custom__"><span className="text-xs text-muted-foreground">Custom key...</span></SelectItem>
+                  </SelectContent>
+                </Select>
               ) : (
-                <Search className="h-4 w-4" />
+                <Input value={key} onChange={(e) => setKey(e.target.value)} placeholder="Player_123456" className="font-mono text-xs h-8" disabled={!selectedStore} />
               )}
-              Look Up Entry
-            </Button>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs text-foreground">Data (JSON)</Label>
-              <Textarea
-                value={entryData}
-                onChange={(e) => setEntryData(e.target.value)}
-                placeholder={selectedStore ? '{"coins": 100, "level": 5}' : "Select a datastore first..."}
-                className="min-h-48 font-mono text-xs"
-                disabled={!selectedStore}
-              />
             </div>
+          </div>
 
-            <Button
-              className="w-full gap-2"
-              onClick={saveEntry}
-              disabled={!selectedStore || !key || !entryData || saving || !hasLoaded}
-            >
-              {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              Save Entry
-            </Button>
-          </CardContent>
-        </Card>
+          {selectedStore && (
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
+              <span className="flex items-center gap-1"><Key className="h-2.5 w-2.5" />{loadingKeys ? "Loading..." : keysLoaded ? `${keys.length} keys` : ""}</span>
+              <Button variant="ghost" size="sm" onClick={fetchKeys} disabled={loadingKeys} className="h-5 gap-1 text-[10px] px-1">
+                {loadingKeys ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <List className="h-2.5 w-2.5" />} Refresh
+              </Button>
+            </div>
+          )}
+
+          <Button variant="outline" className="w-full gap-2 h-8 text-xs font-mono" onClick={lookupEntry} disabled={!selectedStore || !key || loadingEntry}>
+            {loadingEntry ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />} Look Up
+          </Button>
+
+          <div className="space-y-1">
+            <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Data (JSON)</Label>
+            <Textarea value={entryData} onChange={(e) => setEntryData(e.target.value)} placeholder='{"coins": 100}' className="min-h-40 font-mono text-xs" disabled={!selectedStore} />
+          </div>
+
+          <Button className="w-full gap-2 h-8 text-xs font-mono" onClick={saveEntry} disabled={!selectedStore || !key || !entryData || saving || !hasLoaded}>
+            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Save Entry
+          </Button>
+        </div>
       </div>
     </div>
   )

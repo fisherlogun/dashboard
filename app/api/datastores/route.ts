@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { getConfig } from "@/lib/db"
-import { hasPermission } from "@/lib/roles"
+import { getProjectById, getMemberRole } from "@/lib/db"
 import {
   listDatastores,
   listDatastoreKeys,
@@ -10,28 +9,31 @@ import {
 } from "@/lib/roblox"
 import { z } from "zod"
 
-// GET /api/datastores?action=list | ?action=get&name=...&scope=...&key=...
+async function getProjectConfig(req: NextRequest, session: { userId: string }) {
+  const projectId = req.nextUrl.searchParams.get("projectId") || req.headers.get("x-project-id")
+  if (!projectId) return null
+  const project = await getProjectById(projectId)
+  if (!project) return null
+  const role = await getMemberRole(projectId, session.userId)
+  if (!role) return null
+  return { project, role }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-    if (!hasPermission(session.role, "manage_datastores")) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const config = getConfig()
-    if (!config) {
-      return NextResponse.json({ error: "Setup not complete" }, { status: 400 })
-    }
+    const ctx = await getProjectConfig(request, session)
+    if (!ctx) return NextResponse.json({ error: "No project selected" }, { status: 400 })
 
+    const { project } = ctx
     const { searchParams } = new URL(request.url)
     const action = searchParams.get("action") ?? "list"
 
     if (action === "list") {
       const cursor = searchParams.get("cursor") ?? undefined
-      const result = await listDatastores(config.universeId, config.apiKey, cursor)
+      const result = await listDatastores(project.universe_id, project.api_key, cursor)
       return NextResponse.json(result)
     }
 
@@ -39,21 +41,8 @@ export async function GET(request: NextRequest) {
       const name = searchParams.get("name")
       const scope = searchParams.get("scope") ?? "global"
       const cursor = searchParams.get("cursor") ?? undefined
-
-      if (!name) {
-        return NextResponse.json(
-          { error: "name is required" },
-          { status: 400 }
-        )
-      }
-
-      const result = await listDatastoreKeys(
-        config.universeId,
-        name,
-        scope,
-        config.apiKey,
-        cursor
-      )
+      if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 })
+      const result = await listDatastoreKeys(project.universe_id, name, scope, project.api_key, cursor)
       return NextResponse.json(result)
     }
 
@@ -61,33 +50,19 @@ export async function GET(request: NextRequest) {
       const name = searchParams.get("name")
       const scope = searchParams.get("scope") ?? "global"
       const key = searchParams.get("key")
-
-      if (!name || !key) {
-        return NextResponse.json(
-          { error: "name and key are required" },
-          { status: 400 }
-        )
-      }
-
-      const data = await getDatastoreEntry(
-        config.universeId,
-        name,
-        scope,
-        key,
-        config.apiKey
-      )
+      if (!name || !key) return NextResponse.json({ error: "name and key are required" }, { status: 400 })
+      const data = await getDatastoreEntry(project.universe_id, name, scope, key, project.api_key)
       return NextResponse.json({ data })
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   } catch (error) {
-    const msg = error instanceof Error ? error.message : "Unknown error"
-    return NextResponse.json({ error: msg }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
   }
 }
 
-// POST /api/datastores - set entry
 const setSchema = z.object({
+  projectId: z.string(),
   name: z.string().min(1),
   scope: z.string().default("global"),
   key: z.string().min(1),
@@ -97,33 +72,21 @@ const setSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-    if (!hasPermission(session.role, "manage_datastores")) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
-    const config = getConfig()
-    if (!config) {
-      return NextResponse.json({ error: "Setup not complete" }, { status: 400 })
-    }
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = await request.json()
     const parsed = setSchema.safeParse(body)
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid payload", details: parsed.error.flatten() },
-        { status: 400 }
-      )
-    }
+    if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 })
 
-    const { name, scope, key, data } = parsed.data
-    await setDatastoreEntry(config.universeId, name, scope, key, data, config.apiKey)
+    const { projectId, name, scope, key, data } = parsed.data
+    const project = await getProjectById(projectId)
+    if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
+    const role = await getMemberRole(projectId, session.userId)
+    if (!role) return NextResponse.json({ error: "Not a member" }, { status: 403 })
 
+    await setDatastoreEntry(project.universe_id, name, scope, key, data, project.api_key)
     return NextResponse.json({ success: true })
   } catch (error) {
-    const msg = error instanceof Error ? error.message : "Unknown error"
-    return NextResponse.json({ error: msg }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
   }
 }

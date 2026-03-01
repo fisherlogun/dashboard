@@ -28,8 +28,6 @@ export interface SessionData {
   avatarUrl: string
   accessToken: string
   refreshToken: string
-  role: "owner" | "admin" | "moderator"
-  setupComplete: boolean
   expiresAt: number
 }
 

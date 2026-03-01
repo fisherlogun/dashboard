@@ -1,42 +1,22 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import { JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import { ThemeProvider } from '@/components/theme-provider'
 import { SessionProvider } from '@/components/session-provider'
 import { Toaster } from 'sonner'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const _geist = Geist({ subsets: ["latin"] })
+const _geistMono = Geist_Mono({ subsets: ["latin"] })
+const _jetbrains = JetBrains_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: 'Nexus | Roblox Server Dashboard',
-  description: 'Professional Roblox game server management. Real-time monitoring, player management, commands, and administration.',
-  generator: 'v0.app',
-  icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
-  },
+  title: 'Nexus Dashboard',
+  description: 'Advanced Roblox game server command and control. Real-time telemetry, player management, and remote operations.',
 }
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f2f4f7' },
-    { media: '(prefers-color-scheme: dark)', color: '#171b2d' },
-  ],
+  themeColor: '#0a0e17',
 }
 
 export default function RootLayout({
@@ -45,19 +25,23 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="font-sans antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <SessionProvider>
-            {children}
-          </SessionProvider>
-          <Toaster richColors position="top-right" />
-        </ThemeProvider>
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body className="font-sans antialiased bg-background text-foreground">
+        <SessionProvider>
+          {children}
+        </SessionProvider>
+        <Toaster
+          richColors
+          position="top-right"
+          toastOptions={{
+            style: {
+              borderRadius: '0px',
+              border: '1px solid #1e293b',
+              background: '#0f1420',
+              color: '#c8d6e5',
+            },
+          }}
+        />
         <Analytics />
       </body>
     </html>

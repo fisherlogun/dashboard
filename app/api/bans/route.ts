@@ -1,189 +1,115 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { hasPermission } from "@/lib/roles"
-import { addActionLog, getConfig, addBan, getBans, unbanUser } from "@/lib/db"
+import { getBans, createBan, unbanUser, getProject, getMemberRole, addActionLog, isGlobalAdmin } from "@/lib/db"
 import { publishMessage } from "@/lib/roblox"
-import type { Role } from "@/lib/roles"
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const projectId = req.nextUrl.searchParams.get("projectId")
+  if (!projectId) return NextResponse.json({ error: "projectId required" }, { status: 400 })
+
   try {
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const bans = getBans()
-
-    return NextResponse.json({
-      bans: bans.map((b) => ({
-        _id: b.id,
-        robloxUserId: b.robloxUserId,
-        bannedBy: b.bannedBy,
-        bannedByName: b.bannedByName,
-        reason: b.reason,
-        privateReason: b.privateReason,
-        duration: b.duration,
-        expiresAt: b.expiresAt?.toISOString() ?? null,
-        createdAt: b.createdAt.toISOString(),
-        active: b.active,
-      })),
-    })
+    const bans = await getBans(projectId)
+    return NextResponse.json({ bans })
   } catch (error) {
     console.error("Bans fetch error:", error)
-    return NextResponse.json({ error: "Failed to fetch bans" }, { status: 500 })
+    return NextResponse.json({ error: "Failed" }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   try {
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    if (!hasPermission(session.role as Role, "execute_ban")) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
-
     const body = await req.json()
-    const { robloxUserId, reason, privateReason, duration, expiresAt: expiresAtStr } = body
-
-    if (!robloxUserId || !reason || !duration) {
+    const { projectId, robloxUserId, reason, privateReason, duration } = body
+    if (!projectId || !robloxUserId || !reason || !duration) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    const config = getConfig()
+    const role = await getMemberRole(projectId, session.userId)
+    if (!role && !isGlobalAdmin(session.userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    // Calculate expiration
+    const project = await getProject(projectId)
+    if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
+
     let expiresAt: Date | null = null
     let durationSeconds: number | null = null
-
-    if (duration === "custom" && expiresAtStr) {
-      expiresAt = new Date(expiresAtStr)
-      durationSeconds = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000))
-    } else if (duration !== "permanent") {
+    if (duration !== "permanent") {
       const units: Record<string, number> = {
-        "1h": 3600,
-        "6h": 21600,
-        "12h": 43200,
-        "1d": 86400,
-        "3d": 259200,
-        "7d": 604800,
-        "30d": 2592000,
+        "1h": 3600, "6h": 21600, "12h": 43200, "1d": 86400,
+        "3d": 259200, "7d": 604800, "30d": 2592000,
       }
       durationSeconds = units[duration] ?? null
-      if (durationSeconds) {
-        expiresAt = new Date(Date.now() + durationSeconds * 1000)
-      }
+      if (body.durationSeconds) durationSeconds = body.durationSeconds
+      if (body.expiresAt) expiresAt = new Date(body.expiresAt)
+      else if (durationSeconds) expiresAt = new Date(Date.now() + durationSeconds * 1000)
     }
 
-    // Send ban command to the game via MessagingService
-    if (config) {
-      try {
-        const banPayload = JSON.stringify({
-          type: "ban",
-          userId: String(robloxUserId),
-          reason,
-          privateReason: privateReason || reason,
-          duration,
-          durationSeconds,
-          expiresAt: expiresAt?.toISOString() ?? null,
-          issuedBy: session.displayName,
-          issuedAt: new Date().toISOString(),
-        })
-        await publishMessage(
-          config.universeId,
-          "DashboardCommands",
-          banPayload,
-          config.apiKey
-        )
-      } catch (err) {
-        console.error("MessagingService ban error:", err)
-      }
-    }
+    try {
+      const payload = JSON.stringify({
+        type: "ban", userId: String(robloxUserId), reason,
+        privateReason: privateReason || reason, duration, durationSeconds,
+        expiresAt: expiresAt?.toISOString() ?? null,
+        issuedBy: session.displayName, issuedAt: new Date().toISOString(),
+      })
+      await publishMessage(project.universe_id, "DashboardCommands", payload, project.api_key)
+    } catch (err) { console.error("MessagingService ban error:", err) }
 
-    addBan({
-      robloxUserId: String(robloxUserId),
-      bannedBy: session.userId,
-      bannedByName: session.displayName,
-      reason,
-      privateReason: privateReason || "",
-      duration,
-      durationSeconds,
-      expiresAt,
-      createdAt: new Date(),
-      active: true,
+    await createBan({
+      projectId, robloxUserId: String(robloxUserId),
+      bannedBy: session.userId, bannedByName: session.displayName,
+      reason, privateReason: privateReason || "", duration, durationSeconds, expiresAt,
     })
 
-    addActionLog({
-      userId: session.userId,
-      userName: session.displayName,
-      action: "ban",
-      details: `Banned ${robloxUserId} for ${duration}: ${reason}`,
-      ip: "",
-      status: "success",
-    })
-
+    await addActionLog(projectId, session.userId, session.displayName, "ban", `Banned ${robloxUserId}: ${reason}`)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Ban error:", error)
-    return NextResponse.json({ error: "Failed to create ban" }, { status: 500 })
+    return NextResponse.json({ error: "Failed" }, { status: 500 })
   }
 }
 
 export async function DELETE(req: NextRequest) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   try {
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    let banId: string | null = null
+    let projectId: string | null = null
+    let robloxUserId: string | null = null
+
+    // Support both body and query params
+    const contentType = req.headers.get("content-type")
+    if (contentType?.includes("application/json")) {
+      const body = await req.json()
+      banId = body.banId; projectId = body.projectId; robloxUserId = body.robloxUserId
     }
+    if (!banId) banId = req.nextUrl.searchParams.get("banId")
+    if (!projectId) projectId = req.nextUrl.searchParams.get("projectId")
+    if (!robloxUserId) robloxUserId = req.nextUrl.searchParams.get("userId")
 
-    if (!hasPermission(session.role as Role, "manage_bans")) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
+    if (!banId || !projectId) return NextResponse.json({ error: "banId and projectId required" }, { status: 400 })
 
-    const { searchParams } = new URL(req.url)
-    const robloxUserId = searchParams.get("userId")
-    if (!robloxUserId) {
-      return NextResponse.json({ error: "userId required" }, { status: 400 })
-    }
+    const role = await getMemberRole(projectId, session.userId)
+    if (!role && !isGlobalAdmin(session.userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    const config = getConfig()
-
-    // Send unban command to the game via MessagingService
-    if (config) {
+    const project = await getProject(projectId)
+    if (project && robloxUserId) {
       try {
-        const unbanPayload = JSON.stringify({
-          type: "unban",
-          userId: robloxUserId,
-          issuedBy: session.displayName,
-          issuedAt: new Date().toISOString(),
-        })
-        await publishMessage(
-          config.universeId,
-          "DashboardCommands",
-          unbanPayload,
-          config.apiKey
-        )
-      } catch (err) {
-        console.error("MessagingService unban error:", err)
-      }
+        const payload = JSON.stringify({ type: "unban", userId: robloxUserId, issuedBy: session.displayName, issuedAt: new Date().toISOString() })
+        await publishMessage(project.universe_id, "DashboardCommands", payload, project.api_key)
+      } catch (err) { console.error("MessagingService unban error:", err) }
     }
 
-    unbanUser(robloxUserId)
-
-    addActionLog({
-      userId: session.userId,
-      userName: session.displayName,
-      action: "unban",
-      details: `Unbanned user ${robloxUserId}`,
-      ip: "",
-      status: "success",
-    })
-
+    await unbanUser(banId)
+    await addActionLog(projectId, session.userId, session.displayName, "unban", `Unbanned ${robloxUserId || banId}`)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Unban error:", error)
-    return NextResponse.json({ error: "Failed to unban" }, { status: 500 })
+    return NextResponse.json({ error: "Failed" }, { status: 500 })
   }
 }

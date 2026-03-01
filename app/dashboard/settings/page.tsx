@@ -2,373 +2,210 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useSession } from "@/components/session-provider"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { Settings, Key, Users, Shield, Loader2, Trash2, Moon, Sun, Monitor } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Settings, Key, Users, Shield, Loader2, Trash2, Plus, Moon, Sun, Monitor } from "lucide-react"
 import { toast } from "sonner"
 import { useTheme } from "next-themes"
-import { hasPermission, getRoleLabel, getRoleColor, type Role } from "@/lib/roles"
 
-interface UserRoleEntry {
-  userId: string
-  displayName: string
-  role: Role
+interface MemberEntry {
+  user_id: string
+  display_name: string
+  role: string
 }
 
 export default function SettingsPage() {
-  const { user } = useSession()
+  const { user, activeProject } = useSession()
   const { theme, setTheme } = useTheme()
   const [newApiKey, setNewApiKey] = useState("")
   const [rotateLoading, setRotateLoading] = useState(false)
-  const [confirmRotate, setConfirmRotate] = useState(false)
-  const [roles, setRoles] = useState<UserRoleEntry[]>([])
-  const [rolesLoading, setRolesLoading] = useState(false)
+  const [members, setMembers] = useState<MemberEntry[]>([])
+  const [membersLoading, setMembersLoading] = useState(false)
   const [newUserId, setNewUserId] = useState("")
-  const [newUserName, setNewUserName] = useState("")
-  const [newUserRole, setNewUserRole] = useState<Role>("moderator")
+  const [newRole, setNewRole] = useState("moderator")
 
-  const isOwner = user?.role === "owner"
-  const canManageRoles = user ? hasPermission(user.role as Role, "manage_roles") : false
+  const myRole = activeProject?.role
+  const isOwner = myRole === "owner"
 
-  const fetchRoles = useCallback(async () => {
-    if (!canManageRoles) return
-    setRolesLoading(true)
+  const fetchMembers = useCallback(async () => {
+    if (!activeProject || !isOwner) return
+    setMembersLoading(true)
     try {
-      const res = await fetch("/api/settings/roles")
-      if (res.ok) {
-        const data = await res.json()
-        setRoles(data.roles)
-      }
-    } catch {
-      toast.error("Failed to fetch roles")
-    } finally {
-      setRolesLoading(false)
-    }
-  }, [canManageRoles])
+      const res = await fetch(`/api/settings/roles?projectId=${activeProject.id}`)
+      if (res.ok) { const d = await res.json(); setMembers(d.members ?? []) }
+    } catch { /* */ } finally { setMembersLoading(false) }
+  }, [activeProject, isOwner])
 
-  useEffect(() => {
-    fetchRoles()
-  }, [fetchRoles])
+  useEffect(() => { fetchMembers() }, [fetchMembers])
 
-  async function handleRotateKey() {
-    if (!newApiKey) return
+  const handleRotate = async () => {
+    if (!activeProject || !newApiKey) return
     setRotateLoading(true)
     try {
       const res = await fetch("/api/settings/api-key", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newApiKey }),
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: activeProject.id, newApiKey }),
       })
-      if (res.ok) {
-        toast.success("API key rotated successfully")
-        setNewApiKey("")
-      } else {
-        const data = await res.json()
-        toast.error(data.error || "Failed to rotate key")
-      }
-    } catch {
-      toast.error("Network error")
-    } finally {
-      setRotateLoading(false)
-      setConfirmRotate(false)
-    }
+      if (res.ok) { toast.success("API key rotated"); setNewApiKey("") }
+      else { const d = await res.json(); toast.error(d.error || "Failed") }
+    } catch { toast.error("Network error") } finally { setRotateLoading(false) }
   }
 
-  async function handleAddUser() {
-    if (!newUserId || !newUserName) return
+  const handleAddMember = async () => {
+    if (!activeProject || !newUserId) return
     try {
       const res = await fetch("/api/settings/roles", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: newUserId,
-          displayName: newUserName,
-          role: newUserRole,
-        }),
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: activeProject.id, userId: newUserId, role: newRole }),
       })
-      if (res.ok) {
-        toast.success("User role assigned")
-        setNewUserId("")
-        setNewUserName("")
-        fetchRoles()
-      } else {
-        const data = await res.json()
-        toast.error(data.error || "Failed to assign role")
-      }
-    } catch {
-      toast.error("Network error")
-    }
+      if (res.ok) { toast.success("Member added"); setNewUserId(""); fetchMembers() }
+      else { const d = await res.json(); toast.error(d.error || "Failed") }
+    } catch { toast.error("Network error") }
   }
 
-  async function handleChangeRole(userId: string, displayName: string, role: Role) {
+  const handleChangeRole = async (userId: string, role: string) => {
+    if (!activeProject) return
     try {
       const res = await fetch("/api/settings/roles", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, displayName, role }),
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: activeProject.id, userId, role }),
       })
-      if (res.ok) {
-        toast.success("Role updated")
-        fetchRoles()
-      } else {
-        const data = await res.json()
-        toast.error(data.error || "Failed to update role")
-      }
-    } catch {
-      toast.error("Network error")
-    }
+      if (res.ok) { toast.success("Role updated"); fetchMembers() }
+    } catch { toast.error("Failed") }
   }
 
-  async function handleRemoveUser(userId: string) {
+  const handleRemove = async (userId: string) => {
+    if (!activeProject) return
     try {
       const res = await fetch("/api/settings/roles", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, action: "remove" }),
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: activeProject.id, userId, action: "remove" }),
       })
-      if (res.ok) {
-        toast.success("User removed")
-        fetchRoles()
-      } else {
-        const data = await res.json()
-        toast.error(data.error || "Failed to remove user")
-      }
-    } catch {
-      toast.error("Network error")
-    }
+      if (res.ok) { toast.success("Removed"); fetchMembers() }
+    } catch { toast.error("Failed") }
   }
+
+  if (!activeProject) return <div className="flex items-center justify-center h-64 text-muted-foreground font-mono text-xs">NO_PROJECT_SELECTED</div>
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-6">
-        {/* API Key Management */}
-        {isOwner && (
-          <Card className="border-border/50">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Key className="h-4 w-4 text-primary" />
-                <CardTitle className="text-card-foreground">API Key Management</CardTitle>
-              </div>
-              <CardDescription>
-                Rotate your Roblox Open Cloud API key. The current key will be replaced.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="newApiKey" className="text-foreground">New API Key</Label>
-                <Input
-                  id="newApiKey"
-                  type="password"
-                  placeholder="Enter new API key..."
-                  value={newApiKey}
-                  onChange={(e) => setNewApiKey(e.target.value)}
-                />
-              </div>
-              <Button
-                variant="destructive"
-                onClick={() => setConfirmRotate(true)}
-                disabled={!newApiKey || rotateLoading}
-                className="gap-2"
-              >
-                <Key className="h-4 w-4" />
-                Rotate API Key
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Role Management */}
-        {canManageRoles && (
-          <Card className="border-border/50">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-primary" />
-                <CardTitle className="text-card-foreground">User Roles</CardTitle>
-              </div>
-              <CardDescription>
-                Manage who has access to the dashboard and their permission level.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium text-foreground">Current Users</h4>
-                {rolesLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading roles...
-                  </div>
-                ) : roles.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No users configured.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {roles.map((r) => (
-                      <div
-                        key={r.userId}
-                        className="flex items-center justify-between rounded-lg border border-border/50 p-3"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Shield className={`h-4 w-4 ${getRoleColor(r.role)}`} />
-                          <div>
-                            <p className="text-sm font-medium text-foreground">{r.displayName}</p>
-                            <p className="text-xs text-muted-foreground font-mono">ID: {r.userId}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {r.userId === user?.userId ? (
-                            <Badge className={getRoleColor(r.role)}>
-                              {getRoleLabel(r.role)} (You)
-                            </Badge>
-                          ) : (
-                            <>
-                              <Select
-                                value={r.role}
-                                onValueChange={(v) => handleChangeRole(r.userId, r.displayName, v as Role)}
-                              >
-                                <SelectTrigger className="w-32">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="admin">Admin</SelectItem>
-                                  <SelectItem value="moderator">Moderator</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <Button variant="ghost" size="icon" onClick={() => handleRemoveUser(r.userId)}>
-                                <Trash2 className="h-4 w-4 text-destructive-foreground" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <Separator />
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium text-foreground">Add User</h4>
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <Input placeholder="Roblox User ID" value={newUserId} onChange={(e) => setNewUserId(e.target.value)} />
-                  <Input placeholder="Display Name" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} />
-                  <Select value={newUserRole} onValueChange={(v) => setNewUserRole(v as Role)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="moderator">Moderator</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button onClick={handleAddUser} disabled={!newUserId || !newUserName}>Add User</Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Theme */}
-        <Card className="border-border/50">
-          <CardHeader>
-            <CardTitle className="text-card-foreground">Appearance</CardTitle>
-            <CardDescription>Customize the dashboard appearance.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              <Button variant={theme === "light" ? "default" : "outline"} size="sm" onClick={() => setTheme("light")} className="gap-2">
-                <Sun className="h-4 w-4" /> Light
-              </Button>
-              <Button variant={theme === "dark" ? "default" : "outline"} size="sm" onClick={() => setTheme("dark")} className="gap-2">
-                <Moon className="h-4 w-4" /> Dark
-              </Button>
-              <Button variant={theme === "system" ? "default" : "outline"} size="sm" onClick={() => setTheme("system")} className="gap-2">
-                <Monitor className="h-4 w-4" /> System
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Permission Reference */}
-        <Card className="border-border/50">
-          <CardHeader>
-            <CardTitle className="text-card-foreground">Permission Reference</CardTitle>
-            <CardDescription>Overview of what each role can do.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="pb-2 text-left font-medium text-foreground">Permission</th>
-                    <th className="pb-2 text-center font-medium text-chart-1">Owner</th>
-                    <th className="pb-2 text-center font-medium text-chart-2">Admin</th>
-                    <th className="pb-2 text-center font-medium text-chart-4">Moderator</th>
-                  </tr>
-                </thead>
-                <tbody className="text-muted-foreground">
-                  {[
-                    { perm: "View Statistics", owner: true, admin: true, mod: true },
-                    { perm: "Kick Players", owner: true, admin: true, mod: true },
-                    { perm: "Ban Players", owner: true, admin: true, mod: false },
-                    { perm: "Warn Players", owner: true, admin: true, mod: true },
-                    { perm: "Send Announcements", owner: true, admin: true, mod: true },
-                    { perm: "Manage Bans", owner: true, admin: true, mod: false },
-                    { perm: "Manage Datastores", owner: true, admin: false, mod: false },
-                    { perm: "View All Logs", owner: true, admin: true, mod: false },
-                    { perm: "View Own Logs", owner: true, admin: true, mod: true },
-                    { perm: "Manage Roles", owner: true, admin: false, mod: false },
-                    { perm: "Manage API Key", owner: true, admin: false, mod: false },
-                    { perm: "Manage Config", owner: true, admin: false, mod: false },
-                  ].map((row) => (
-                    <tr key={row.perm} className="border-b border-border/50">
-                      <td className="py-2 text-foreground">{row.perm}</td>
-                      <td className="py-2 text-center">{row.owner ? <span className="text-success">Yes</span> : <span>--</span>}</td>
-                      <td className="py-2 text-center">{row.admin ? <span className="text-success">Yes</span> : <span>--</span>}</td>
-                      <td className="py-2 text-center">{row.mod ? <span className="text-success">Yes</span> : <span>--</span>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Settings className="h-4 w-4 text-primary" />
+        <h1 className="text-sm font-mono font-bold text-foreground uppercase tracking-wider">Settings</h1>
       </div>
 
-      {/* Confirm Rotate Dialog */}
-      <AlertDialog open={confirmRotate} onOpenChange={setConfirmRotate}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Rotate API Key</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will replace your current API key. All future API calls will use the new key. This action will be logged.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRotateKey} disabled={rotateLoading}>
-              {rotateLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Confirm Rotation
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Project Info */}
+      <div className="border border-border bg-card p-4 space-y-2">
+        <h2 className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Project Info</h2>
+        <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+          <span className="text-muted-foreground">Name</span><span className="text-foreground">{activeProject.name}</span>
+          <span className="text-muted-foreground">Your Role</span>
+          <Badge variant="outline" className="text-[10px] font-mono w-fit">{myRole?.toUpperCase()}</Badge>
+          <span className="text-muted-foreground">Universe ID</span><span className="text-foreground">{activeProject.universe_id}</span>
+          <span className="text-muted-foreground">Place ID</span><span className="text-foreground">{activeProject.place_id}</span>
+        </div>
+        <div className="pt-2 border-t border-border/50 space-y-1">
+          <span className="text-[10px] font-mono text-muted-foreground uppercase">Project ID (for Lua script)</span>
+          <div className="flex items-center gap-2">
+            <code className="text-xs font-mono text-primary bg-primary/5 border border-primary/20 px-2 py-1 select-all break-all">{activeProject.id}</code>
+            <Button variant="outline" size="sm" className="h-6 text-[10px] font-mono shrink-0" onClick={() => { navigator.clipboard.writeText(activeProject.id); toast.success("Project ID copied") }}>
+              COPY
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* API Key (owner only) */}
+      {isOwner && (
+        <div className="border border-border bg-card p-4 space-y-3">
+          <h2 className="text-xs font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-1.5"><Key className="h-3 w-3" /> Rotate API Key</h2>
+          <div className="space-y-1">
+            <Label className="text-[10px] font-mono text-muted-foreground uppercase">New API Key</Label>
+            <Input type="password" placeholder="Enter new key..." value={newApiKey} onChange={(e) => setNewApiKey(e.target.value)} className="font-mono text-xs h-8" />
+          </div>
+          <Button variant="destructive" size="sm" className="gap-1.5 font-mono text-xs uppercase h-7" onClick={handleRotate} disabled={!newApiKey || rotateLoading}>
+            {rotateLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Key className="h-3 w-3" />} Rotate Key
+          </Button>
+        </div>
+      )}
+
+      {/* Members (owner only) */}
+      {isOwner && (
+        <div className="border border-border bg-card p-4 space-y-3">
+          <h2 className="text-xs font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-1.5"><Users className="h-3 w-3" /> Team Members</h2>
+          {membersLoading ? (
+            <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Loading...</div>
+          ) : members.length === 0 ? (
+            <p className="text-xs font-mono text-muted-foreground">No members.</p>
+          ) : (
+            <div className="space-y-1">
+              {members.map((m) => (
+                <div key={m.user_id} className="flex items-center justify-between border border-border/50 p-2">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-3 w-3 text-primary" />
+                    <span className="text-xs font-mono text-foreground">{m.display_name}</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">({m.user_id})</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {m.user_id === user?.userId ? (
+                      <Badge variant="outline" className="text-[10px] font-mono">{m.role.toUpperCase()} (YOU)</Badge>
+                    ) : (
+                      <>
+                        <Select value={m.role} onValueChange={(v) => handleChangeRole(m.user_id, v)}>
+                          <SelectTrigger className="font-mono text-[10px] h-6 w-24"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin" className="font-mono text-xs">Admin</SelectItem>
+                            <SelectItem value="moderator" className="font-mono text-xs">Moderator</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRemove(m.user_id)}>
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2 items-end pt-2 border-t border-border/50">
+            <div className="space-y-1 flex-1">
+              <Label className="text-[10px] font-mono text-muted-foreground uppercase">Roblox User ID</Label>
+              <Input placeholder="123456789" value={newUserId} onChange={(e) => setNewUserId(e.target.value)} className="font-mono text-xs h-7" />
+            </div>
+            <Select value={newRole} onValueChange={setNewRole}>
+              <SelectTrigger className="font-mono text-xs h-7 w-28"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="admin" className="font-mono text-xs">Admin</SelectItem>
+                <SelectItem value="moderator" className="font-mono text-xs">Moderator</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button size="sm" className="h-7 gap-1 font-mono text-xs" onClick={handleAddMember} disabled={!newUserId}>
+              <Plus className="h-3 w-3" /> Add
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Theme */}
+      <div className="border border-border bg-card p-4 space-y-3">
+        <h2 className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Appearance</h2>
+        <div className="flex gap-1.5">
+          {[
+            { val: "light", icon: Sun, label: "LIGHT" },
+            { val: "dark", icon: Moon, label: "DARK" },
+            { val: "system", icon: Monitor, label: "SYSTEM" },
+          ].map((t) => (
+            <button key={t.val} onClick={() => setTheme(t.val)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-mono uppercase border transition-colors ${theme === t.val ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
+              <t.icon className="h-3 w-3" />{t.label}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
