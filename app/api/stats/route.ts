@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
       activeBans: activeBans.length,
       totalBans: bans.length,
       recentLogs: joinLogs,
-      history: history.reverse(),
+      history: history, // already ASC from DB query
       game: gameStats ? {
         name: gameStats.name,
         playing: gameStats.playing,

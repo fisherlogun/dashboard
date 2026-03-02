@@ -279,17 +279,19 @@ export async function upsertLivePlayer(data: {
   username: string
   playTime: number
   accountAge: number
-  avatarUrl: string
-}) {
+  avatarUrl: string | null
+}): Promise<boolean> {
   const q = sql()
-  await q`
+  const result = await q`
     INSERT INTO live_players (user_id, project_id, server_id, display_name, username, play_time, account_age, avatar_url, last_heartbeat)
     VALUES (${data.userId}, ${data.projectId}, ${data.serverId}, ${data.displayName}, ${data.username}, ${data.playTime}, ${data.accountAge}, ${data.avatarUrl}, NOW())
     ON CONFLICT (user_id, project_id) DO UPDATE SET
       server_id = ${data.serverId}, display_name = ${data.displayName}, username = ${data.username},
       play_time = ${data.playTime}, account_age = ${data.accountAge}, avatar_url = ${data.avatarUrl},
       last_heartbeat = NOW()
+    RETURNING (xmax = 0) AS is_new
   `
+  return result?.[0]?.is_new === true
 }
 
 export async function getLivePlayers(projectId: string) {
@@ -319,12 +321,15 @@ export async function addPlayerHistoryPoint(projectId: string, playerCount: numb
 
 export async function getPlayerHistory(projectId: string, minutes: number = 180) {
   const q = sql()
-  return q`SELECT * FROM player_history WHERE project_id = ${projectId} AND recorded_at > NOW() - INTERVAL '${minutes} minutes' ORDER BY recorded_at DESC`
+  // Use computed timestamp instead of INTERVAL interpolation for Neon compatibility
+  const since = new Date(Date.now() - minutes * 60 * 1000).toISOString()
+  return q`SELECT player_count, server_count, recorded_at FROM player_history WHERE project_id = ${projectId} AND recorded_at > ${since} ORDER BY recorded_at ASC`
 }
 
 export async function cleanupOldPlayerHistory(projectId: string, keepMinutes: number = 180) {
   const q = sql()
-  await q`DELETE FROM player_history WHERE project_id = ${projectId} AND recorded_at < NOW() - INTERVAL '${keepMinutes} minutes'`
+  const cutoff = new Date(Date.now() - keepMinutes * 60 * 1000).toISOString()
+  await q`DELETE FROM player_history WHERE project_id = ${projectId} AND recorded_at < ${cutoff}`
 }
 
 // ---------- Global Admin ----------

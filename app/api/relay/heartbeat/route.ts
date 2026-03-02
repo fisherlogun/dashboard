@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getProject, upsertLiveServer, upsertLivePlayer, addPlayerHistoryPoint, cleanupStaleServers } from "@/lib/db"
+import { getProject, upsertLiveServer, upsertLivePlayer, addPlayerHistoryPoint, cleanupStaleServers, addActionLog } from "@/lib/db"
 
 // This endpoint is called by the Roblox Lua script every 15 seconds.
 // It is authenticated by matching the project's API key (sent as x-api-key header).
@@ -35,14 +35,19 @@ export async function POST(req: NextRequest) {
       uptime: uptime ?? 0,
     })
 
-    // Upsert each player
+    // Upsert each player and log new joins
     if (Array.isArray(playerList)) {
       for (const p of playerList) {
-        const avatarUrl = (await fetch(
-          `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${p.userId}&size=150x150&format=Png&isCircular=false`
-        ).then(r => r.json())).data?.[0]?.imageUrl ?? null
+        let avatarUrl = null
+        try {
+          const thumbRes = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${p.userId}&size=150x150&format=Png&isCircular=false`)
+          if (thumbRes.ok) {
+            const thumbData = await thumbRes.json()
+            avatarUrl = thumbData.data?.[0]?.imageUrl ?? null
+          }
+        } catch { /* non-fatal */ }
 
-        await upsertLivePlayer({
+        const isNew = await upsertLivePlayer({
           userId: String(p.userId),
           projectId,
           serverId,
@@ -52,6 +57,19 @@ export async function POST(req: NextRequest) {
           accountAge: p.accountAge ?? 0,
           avatarUrl,
         })
+
+        // Log first-seen joins (upsertLivePlayer returns true if newly inserted)
+        if (isNew) {
+          try {
+            await addActionLog(
+              projectId,
+              String(p.userId),
+              p.username || "Unknown",
+              "join",
+              JSON.stringify({ displayName: p.displayName, userId: p.userId, avatarUrl }),
+            )
+          } catch { /* non-fatal */ }
+        }
       }
     }
     // Record a history point -- throttled to max 1 per 30s per project

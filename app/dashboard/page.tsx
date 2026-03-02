@@ -244,18 +244,22 @@ export default function DashboardPage() {
             <p className="text-xs font-mono text-muted-foreground text-center py-4">NO_RECENT_JOINS</p>
           ) : (
             stats.recentLogs.slice(0, 8).map((log: any, idx: number) => {
-              const displayText = log.details ? JSON.parse(log.details).displayName : log.user_name
-              const isSameName = displayText === log.user_name
-              const playerTag = isSameName ? log.user_name : `${displayText} (${log.user_name})`
-              const userId = log.details ? JSON.parse(log.details).userId : null
+              let details: any = {}
+              try { details = log.details ? JSON.parse(log.details) : {} } catch { details = {} }
+              const displayName = details.displayName || log.user_name || "Unknown"
+              const username = log.user_name || "Unknown"
+              const isSameName = displayName === username
+              const playerTag = isSameName ? username : `${displayName} (${username})`
+              const userId = details.userId || log.user_id || null
+              const avatarUrl = details.avatarUrl || null
               return (
                 <div key={idx} className="border border-border/50 bg-background p-2 flex items-center gap-2 text-[10px] font-mono">
-                  {userId && (
-                    <img
-                      src={`https://thumbnails.roblox.com/v1/users/${userId}/avatar-headshot?size=48x48&format=Png`}
-                      alt=""
-                      className="h-6 w-6 border border-primary/30 shrink-0"
-                    />
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="" className="h-6 w-6 border border-primary/30 shrink-0 object-cover" />
+                  ) : userId ? (
+                    <img src={`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=48x48&format=Png&isCircular=false`} alt="" className="h-6 w-6 border border-primary/30 shrink-0 object-cover" />
+                  ) : (
+                    <div className="h-6 w-6 border border-primary/30 shrink-0 bg-primary/5 flex items-center justify-center text-primary/50">?</div>
                   )}
                   <div className="flex-1 min-w-0">
                     <span className="text-foreground font-bold">{playerTag}</span>
