@@ -63,12 +63,13 @@ export async function POST(req: NextRequest) {
         try {
           const { sql } = await import("@/lib/neon")
           const q = sql()
+          const twoMinutesAgo = new Date(Date.now() - 120 * 1000).toISOString()
           const recentJoin = await q`
             SELECT id FROM action_logs
             WHERE project_id = ${projectId}
               AND user_id = ${String(p.userId)}
               AND action = 'join'
-              AND created_at > NOW() - INTERVAL '120 seconds'
+              AND created_at > ${twoMinutesAgo}
             LIMIT 1
           `
           if (!recentJoin || recentJoin.length === 0) {

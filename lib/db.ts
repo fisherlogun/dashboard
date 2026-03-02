@@ -296,9 +296,10 @@ export async function upsertLivePlayer(data: {
 
 export async function getLivePlayers(projectId: string) {
   const q = sql()
+  const since = new Date(Date.now() - 45 * 1000).toISOString()
   return q`
     SELECT * FROM live_players
-    WHERE project_id = ${projectId} AND last_heartbeat > NOW() - INTERVAL '45 seconds'
+    WHERE project_id = ${projectId} AND last_heartbeat > ${since}
     ORDER BY display_name ASC
   `
 }
