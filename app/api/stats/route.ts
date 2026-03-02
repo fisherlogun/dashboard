@@ -25,6 +25,20 @@ export async function GET(req: NextRequest) {
       getFavoriteCount(project.universe_id).catch(() => 0),
     ])
 
+    // Fetch game thumbnail from Roblox API
+    let thumbnail = null
+    try {
+      const thumbRes = await fetch(`https://thumbnails.roblox.com/v1/games/multiget/thumbnails?universeIds=${project.universe_id}&size=768x432&format=Png&isCircular=false`, {
+        headers: { "User-Agent": "NexusDashboard" }
+      })
+      if (thumbRes.ok) {
+        const thumbData = await thumbRes.json()
+        if (thumbData.data?.[0]?.thumbnails?.[0]?.imageUrl) {
+          thumbnail = thumbData.data[0].thumbnails[0].imageUrl
+        }
+      }
+    } catch { /* non-fatal */ }
+
     // Clean up old data (keep only last 3 hours)
     try { await cleanupOldPlayerHistory(projectId, 180) } catch { /* non-fatal */ }
 
@@ -39,6 +53,9 @@ export async function GET(req: NextRequest) {
     const avgFps = servers.length > 0 ? servers.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.fps as number) || 0), 0) / servers.length : 0
     const avgPing = servers.length > 0 ? servers.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.ping as number) || 0), 0) / servers.length : 0
 
+    // Filter for join logs only
+    const joinLogs = (recentLogs as Record<string, unknown>[]).filter((log: Record<string, unknown>) => log.action === "join").slice(0, 10)
+
     return NextResponse.json({
       servers: servers.length,
       players: totalPlayers,
@@ -47,7 +64,7 @@ export async function GET(req: NextRequest) {
       avgPing: Math.round(avgPing * 10) / 10,
       activeBans: activeBans.length,
       totalBans: bans.length,
-      recentLogs: recentLogs.slice(0, 10),
+      recentLogs: joinLogs,
       history: history.reverse(),
       game: gameStats ? {
         name: gameStats.name,
@@ -57,7 +74,7 @@ export async function GET(req: NextRequest) {
         upVotes: votes?.upVotes ?? 0,
         downVotes: votes?.downVotes ?? 0,
         maxPlayers: gameStats.maxPlayers,
-        thumbnail: `https://thumbnails.roblox.com/v1/games/icons?gameIds=${project.universe_id}&size=512x512&format=Png`,
+        thumbnail: thumbnail,
       } : null,
     })
   } catch (error) {

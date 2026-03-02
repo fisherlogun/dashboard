@@ -241,20 +241,31 @@ export default function DashboardPage() {
         </h2>
         <div className="space-y-1">
           {!stats.recentLogs || stats.recentLogs.length === 0 ? (
-            <p className="text-xs font-mono text-muted-foreground text-center py-4">NO_RECENT_ACTIVITY</p>
+            <p className="text-xs font-mono text-muted-foreground text-center py-4">NO_RECENT_JOINS</p>
           ) : (
-            stats.recentLogs.slice(0, 8).map((log: any, idx: number) => (
-              <div key={idx} className="border border-border/50 bg-background p-2 flex items-start justify-between gap-2 text-[10px] font-mono">
-                <div className="flex-1 min-w-0">
-                  <span className="text-foreground font-bold">{log.action}</span>
-                  <span className="text-muted-foreground mx-1">•</span>
-                  <span className="text-muted-foreground truncate">{log.user_name}</span>
+            stats.recentLogs.slice(0, 8).map((log: any, idx: number) => {
+              const displayText = log.details ? JSON.parse(log.details).displayName : log.user_name
+              const isSameName = displayText === log.user_name
+              const playerTag = isSameName ? log.user_name : `${displayText} (${log.user_name})`
+              const userId = log.details ? JSON.parse(log.details).userId : null
+              return (
+                <div key={idx} className="border border-border/50 bg-background p-2 flex items-center gap-2 text-[10px] font-mono">
+                  {userId && (
+                    <img
+                      src={`https://thumbnails.roblox.com/v1/users/${userId}/avatar-headshot?size=48x48&format=Png`}
+                      alt=""
+                      className="h-6 w-6 border border-primary/30 shrink-0"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <span className="text-foreground font-bold">{playerTag}</span>
+                  </div>
+                  <span className="text-muted-foreground/50 shrink-0">
+                    {new Date(log.created_at).toLocaleString("en-US", { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })}
+                  </span>
                 </div>
-                <span className="text-muted-foreground/50 shrink-0">
-                  {new Date(log.created_at).toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
-                </span>
-              </div>
-            ))
+              )
+            })
           )}
         </div>
       </div>
