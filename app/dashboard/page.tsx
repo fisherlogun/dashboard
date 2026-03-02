@@ -18,7 +18,7 @@ const fetcher = (url: string) => fetch(url).then(r => r.json())
 export default function DashboardPage() {
   const router = useRouter()
   const { activeProject, projects, loading, setActiveProject } = useSession()
-  const { data, mutate, isLoading } = useSWR(
+  const { data, mutate, isValidating } = useSWR(
     activeProject ? `/api/stats?projectId=${activeProject.id}` : null,
     fetcher,
     { refreshInterval: 15000 }
@@ -129,9 +129,9 @@ export default function DashboardPage() {
               size="sm"
               className="font-mono text-xs h-8 gap-1"
               onClick={() => mutate()}
-              disabled={isLoading}
+              disabled={isValidating}
             >
-              <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-3 w-3 ${isValidating ? 'animate-spin' : ''}`} />
               REFRESH
             </Button>
           </div>
@@ -190,13 +190,13 @@ export default function DashboardPage() {
           </h2>
           <span className="font-mono text-[10px] text-muted-foreground">{stats.history.length} data points</span>
         </div>
-        {!stats.history || stats.history.length === 0 ? (
+          {!stats.history || stats.history.length === 0 ? (
           <div className="h-40 flex items-center justify-center text-muted-foreground font-mono text-xs">
-            {isLoading ? "Loading telemetry..." : "NO_TELEMETRY_DATA"}
+            {isValidating ? "Loading telemetry..." : "NO_TELEMETRY_DATA — send a heartbeat from Roblox first"}
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={stats.history.reverse()}>
+            <AreaChart data={stats.history}>
               <defs>
                 <linearGradient id="colorPlayers" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#00e5ff" stopOpacity={0.3} />

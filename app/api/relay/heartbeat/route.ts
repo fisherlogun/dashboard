@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
           }
         } catch { /* non-fatal */ }
 
-        const isNew = await upsertLivePlayer({
+        await upsertLivePlayer({
           userId: String(p.userId),
           projectId,
           serverId,
@@ -58,18 +58,29 @@ export async function POST(req: NextRequest) {
           avatarUrl,
         })
 
-        // Log first-seen joins (upsertLivePlayer returns true if newly inserted)
-        if (isNew) {
-          try {
+        // Log a join event if we haven't seen this player join in the last 2 minutes
+        // (prevents duplicate join logs from frequent heartbeats)
+        try {
+          const { sql } = await import("@/lib/neon")
+          const q = sql()
+          const recentJoin = await q`
+            SELECT id FROM action_logs
+            WHERE project_id = ${projectId}
+              AND user_id = ${String(p.userId)}
+              AND action = 'join'
+              AND created_at > NOW() - INTERVAL '120 seconds'
+            LIMIT 1
+          `
+          if (!recentJoin || recentJoin.length === 0) {
             await addActionLog(
               projectId,
               String(p.userId),
               p.username || "Unknown",
               "join",
-              JSON.stringify({ displayName: p.displayName, userId: p.userId, avatarUrl }),
+              JSON.stringify({ displayName: p.displayName || p.username, userId: p.userId, avatarUrl }),
             )
-          } catch { /* non-fatal */ }
-        }
+          }
+        } catch { /* non-fatal */ }
       }
     }
     // Record a history point -- throttled to max 1 per 30s per project
