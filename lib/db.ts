@@ -263,9 +263,28 @@ export async function getLiveServers(projectId: string) {
   `
 }
 
+export async function getLatestServerHeartbeat(projectId: string): Promise<string | null> {
+  const q = sql()
+  const rows = await q`
+    SELECT MAX(last_heartbeat)::text AS last_heartbeat
+    FROM live_servers
+    WHERE project_id = ${projectId}
+  `
+  return rows[0]?.last_heartbeat ?? null
+}
+
 export async function cleanupStaleServers() {
   const q = sql()
-  await q`DELETE FROM live_servers WHERE last_heartbeat < NOW() - INTERVAL '60 seconds'`
+  await q`
+    DELETE FROM live_servers stale
+    WHERE stale.last_heartbeat < NOW() - INTERVAL '60 seconds'
+      AND EXISTS (
+        SELECT 1 FROM live_servers newer
+        WHERE newer.project_id = stale.project_id
+          AND (newer.last_heartbeat > stale.last_heartbeat
+            OR (newer.last_heartbeat = stale.last_heartbeat AND newer.id > stale.id))
+      )
+  `
   await q`DELETE FROM live_players WHERE last_heartbeat < NOW() - INTERVAL '60 seconds'`
 }
 
@@ -279,24 +298,35 @@ export async function upsertLivePlayer(data: {
   username: string
   playTime: number
   accountAge: number
-  avatarUrl: string
-}) {
+  avatarUrl: string | null
+}): Promise<boolean> {
   const q = sql()
-  await q`
+  const result = await q`
     INSERT INTO live_players (user_id, project_id, server_id, display_name, username, play_time, account_age, avatar_url, last_heartbeat)
     VALUES (${data.userId}, ${data.projectId}, ${data.serverId}, ${data.displayName}, ${data.username}, ${data.playTime}, ${data.accountAge}, ${data.avatarUrl}, NOW())
     ON CONFLICT (user_id, project_id) DO UPDATE SET
       server_id = ${data.serverId}, display_name = ${data.displayName}, username = ${data.username},
-      play_time = ${data.playTime}, account_age = ${data.accountAge}, avatar_url = ${data.avatarUrl},
-      last_heartbeat = NOW()
+      play_time = ${data.playTime}, account_age = ${data.accountAge},
+      avatar_url = COALESCE(${data.avatarUrl}, live_players.avatar_url), last_heartbeat = NOW()
+    RETURNING (xmax = 0) AS is_new
+  `
+  return result?.[0]?.is_new === true
+}
+
+export async function removeLivePlayer(projectId: string, userId: string, serverId: string) {
+  const q = sql()
+  await q`
+    DELETE FROM live_players
+    WHERE project_id = ${projectId} AND user_id = ${userId} AND server_id = ${serverId}
   `
 }
 
 export async function getLivePlayers(projectId: string) {
   const q = sql()
+  const since = new Date(Date.now() - 45 * 1000).toISOString()
   return q`
     SELECT * FROM live_players
-    WHERE project_id = ${projectId} AND last_heartbeat > NOW() - INTERVAL '45 seconds'
+    WHERE project_id = ${projectId} AND last_heartbeat > ${since}
     ORDER BY display_name ASC
   `
 }
@@ -314,20 +344,20 @@ export async function getPlayersInServer(projectId: string, serverId: string) {
 
 export async function addPlayerHistoryPoint(projectId: string, playerCount: number, serverCount: number) {
   const q = sql()
-  await q`
-    INSERT INTO player_history (project_id, player_count, server_count)
-    VALUES (${projectId}, ${playerCount}, ${serverCount})
-  `
+  await q`INSERT INTO player_history (project_id, player_count, server_count) VALUES (${projectId}, ${playerCount}, ${serverCount})`
 }
 
-export async function getPlayerHistory(projectId: string, limit = 60) {
+export async function getPlayerHistory(projectId: string, minutes: number = 180) {
   const q = sql()
-  return q`
-    SELECT player_count, server_count, recorded_at FROM player_history
-    WHERE project_id = ${projectId}
-    ORDER BY recorded_at DESC
-    LIMIT ${limit}
-  `
+  // Use computed timestamp instead of INTERVAL interpolation for Neon compatibility
+  const since = new Date(Date.now() - minutes * 60 * 1000).toISOString()
+  return q`SELECT player_count, server_count, recorded_at FROM player_history WHERE project_id = ${projectId} AND recorded_at > ${since} ORDER BY recorded_at ASC`
+}
+
+export async function cleanupOldPlayerHistory(projectId: string, keepMinutes: number = 180) {
+  const q = sql()
+  const cutoff = new Date(Date.now() - keepMinutes * 60 * 1000).toISOString()
+  await q`DELETE FROM player_history WHERE project_id = ${projectId} AND recorded_at < ${cutoff}`
 }
 
 // ---------- Global Admin ----------

@@ -15,6 +15,7 @@ export async function GET() {
       profileUrl: session.profileUrl,
       avatarUrl: session.avatarUrl,
       isGlobalAdmin: isGlobalAdmin(session.userId),
+      role: "owner",
     },
   })
 }

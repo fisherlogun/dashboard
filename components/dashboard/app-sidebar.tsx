@@ -2,6 +2,21 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useTheme } from "next-themes"
+import {
+  Activity,
+  Ban,
+  Database,
+  LayoutDashboard,
+  LogOut,
+  Moon,
+  Server,
+  Settings2,
+  Sun,
+  TerminalSquare,
+  Users,
+  Waves,
+} from "lucide-react"
 import { useSession } from "@/components/session-provider"
 import {
   Sidebar,
@@ -13,133 +28,50 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
 } from "@/components/ui/sidebar"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu"
-import {
-  BarChart3,
-  Terminal,
-  ScrollText,
-  Settings,
-  Server,
-  ShieldBan,
-  Users,
-  KeyRound,
-  Activity,
-  ChevronDown,
-  LogOut,
-  Plus,
-  Radio,
-  Database,
-} from "lucide-react"
-import { cn } from "@/lib/utils"
 
-const mainNav = [
-  { title: "OVERVIEW", url: "/dashboard", icon: BarChart3 },
-  { title: "SERVERS", url: "/dashboard/servers", icon: Server },
-  { title: "PLAYERS", url: "/dashboard/players", icon: Users },
-  { title: "COMMANDS", url: "/dashboard/commands", icon: Terminal },
-]
-
-const managementNav = [
-  { title: "BANS", url: "/dashboard/bans", icon: ShieldBan },
-  { title: "DATASTORES", url: "/dashboard/datastores", icon: Database },
-  { title: "LOGS", url: "/dashboard/logs", icon: ScrollText },
-  { title: "SETTINGS", url: "/dashboard/settings", icon: Settings },
-]
-
-const adminNav = [
-  { title: "LICENSES", url: "/dashboard/admin", icon: KeyRound },
+const navigation = [
+  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/dashboard/servers", label: "Live servers", icon: Server },
+  { href: "/dashboard/players", label: "Players", icon: Users },
+  { href: "/dashboard/commands", label: "Commands", icon: TerminalSquare },
+  { href: "/dashboard/datastores", label: "Data stores", icon: Database },
+  { href: "/dashboard/bans", label: "Moderation", icon: Ban },
+  { href: "/dashboard/logs", label: "Activity log", icon: Activity },
 ]
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const { user, projects, activeProject, setActiveProject, logout } = useSession()
-
-  const isActive = (url: string) =>
-    url === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(url)
+  const { theme, setTheme } = useTheme()
+  const { activeProject, user, logout } = useSession()
 
   return (
-    <Sidebar className="border-r border-border bg-sidebar">
-      <SidebarHeader className="border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center border border-primary/50 bg-primary/10">
-            <Radio className="h-3.5 w-3.5 text-primary" />
+    <Sidebar variant="sidebar" collapsible="icon">
+      <SidebarHeader className="p-3">
+        <div className="flex items-center gap-3 rounded-xl border border-sidebar-border/70 bg-sidebar-accent/40 px-3 py-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+            <Waves aria-hidden="true" className="size-5" />
           </div>
-          <div className="flex flex-col">
-            <span className="font-mono text-xs font-bold tracking-widest text-primary">NEXUS</span>
-            <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Web Dashboard</span>
+          <div className="min-w-0 group-data-[collapsible=icon]:hidden">
+            <p className="truncate text-sm font-semibold tracking-tight">SCUBA OPS</p>
+            <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">Private console</p>
           </div>
         </div>
       </SidebarHeader>
 
-      {/* Project Switcher */}
-      <div className="border-b border-border px-3 py-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left hover:bg-accent transition-colors border border-transparent hover:border-border">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className={cn("h-2 w-2 shrink-0", activeProject ? "bg-success led-pulse" : "bg-muted-foreground")} />
-                <span className="font-mono text-xs truncate text-foreground">
-                  {activeProject?.name ?? "NO PROJECT"}
-                </span>
-              </div>
-              <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            {projects.map((p) => (
-              <DropdownMenuItem
-                key={p.id}
-                onClick={() => setActiveProject(p)}
-                className="font-mono text-xs"
-              >
-                <div className="flex items-center gap-2 w-full">
-                  <div className={cn("h-1.5 w-1.5 shrink-0", p.id === activeProject?.id ? "bg-success" : "bg-muted-foreground")} />
-                  <span className="truncate">{p.name}</span>
-                  <span className="ml-auto text-[10px] text-muted-foreground uppercase">{p.role}</span>
-                </div>
-              </DropdownMenuItem>
-            ))}
-            {projects.length > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuItem asChild className="font-mono text-xs">
-              <Link href="/setup">
-                <Plus className="mr-2 h-3 w-3" />
-                New Project
-              </Link>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      <SidebarContent>
+      <SidebarContent className="px-2">
         <SidebarGroup>
-          <SidebarGroupLabel className="font-mono text-[10px] tracking-widest text-muted-foreground/60 px-4">
-            OPERATIONS
-          </SidebarGroupLabel>
+          <SidebarGroupLabel className="px-2 font-mono text-[9px] uppercase tracking-[0.18em]">Game</SidebarGroupLabel>
           <SidebarMenu>
-            {mainNav.map((item) => {
-              const active = isActive(item.url)
+            {navigation.map(({ href, label, icon: Icon }) => {
+              const isActive = pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`))
               return (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={active}>
-                    <Link
-                      href={item.url}
-                      className={cn(
-                        "flex items-center gap-3 px-4 py-2 font-mono text-xs tracking-wide transition-colors",
-                        active
-                          ? "bg-accent border-l-2 border-l-primary text-primary"
-                          : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                      )}
-                    >
-                      <item.icon className="h-3.5 w-3.5" />
-                      {item.title}
-                      {active && <Activity className="ml-auto h-3 w-3 text-primary led-pulse" />}
+                <SidebarMenuItem key={href}>
+                  <SidebarMenuButton asChild isActive={isActive} tooltip={label}>
+                    <Link href={href} aria-current={isActive ? "page" : undefined}>
+                      <Icon aria-hidden="true" />
+                      <span>{label}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -148,91 +80,61 @@ export function AppSidebar() {
           </SidebarMenu>
         </SidebarGroup>
 
+        <SidebarSeparator className="mx-2 w-auto" />
+
         <SidebarGroup>
-          <SidebarGroupLabel className="font-mono text-[10px] tracking-widest text-muted-foreground/60 px-4">
-            MANAGEMENT
-          </SidebarGroupLabel>
+          <SidebarGroupLabel className="px-2 font-mono text-[9px] uppercase tracking-[0.18em]">Access</SidebarGroupLabel>
           <SidebarMenu>
-            {managementNav.map((item) => {
-              const active = isActive(item.url)
-              return (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={active}>
-                    <Link
-                      href={item.url}
-                      className={cn(
-                        "flex items-center gap-3 px-4 py-2 font-mono text-xs tracking-wide transition-colors",
-                        active
-                          ? "bg-accent border-l-2 border-l-primary text-primary"
-                          : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                      )}
-                    >
-                      <item.icon className="h-3.5 w-3.5" />
-                      {item.title}
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )
-            })}
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={pathname === "/dashboard/settings"} tooltip="Private settings">
+                <Link href="/dashboard/settings" aria-current={pathname === "/dashboard/settings" ? "page" : undefined}>
+                  <Settings2 aria-hidden="true" />
+                  <span>Private settings</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
-
-        {user?.isGlobalAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="font-mono text-[10px] tracking-widest text-muted-foreground/60 px-4">
-              ADMIN
-            </SidebarGroupLabel>
-            <SidebarMenu>
-              {adminNav.map((item) => {
-                const active = isActive(item.url)
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={active}>
-                      <Link
-                        href={item.url}
-                        className={cn(
-                          "flex items-center gap-3 px-4 py-2 font-mono text-xs tracking-wide transition-colors",
-                          active
-                            ? "bg-accent border-l-2 border-l-primary text-primary"
-                            : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                        )}
-                      >
-                        <item.icon className="h-3.5 w-3.5" />
-                        {item.title}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
-          </SidebarGroup>
-        )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-border px-3 py-3">
-        {user && (
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <img
-                src={user.avatarUrl}
-                alt=""
-                className="h-7 w-7 border border-border"
-              />
-              <div className="absolute -bottom-0.5 -right-0.5 h-2 w-2 bg-success border border-sidebar led-pulse" />
-            </div>
-            <div className="flex flex-col flex-1 min-w-0">
-              <span className="font-mono text-xs truncate text-foreground">{user.displayName}</span>
-              <span className="font-mono text-[10px] text-muted-foreground truncate">{user.userId}</span>
-            </div>
+      <SidebarFooter className="gap-2 p-3">
+        <div className="rounded-xl border border-sidebar-border/70 bg-sidebar-accent/30 p-3 group-data-[collapsible=icon]:hidden">
+          <div className="flex items-center gap-2">
+            <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
+            <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-primary">Owner verified</span>
+          </div>
+          <p className="mt-2 truncate text-xs font-medium">{activeProject?.name ?? "Scuba Simulator"}</p>
+          <p className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
+            {activeProject ? `PLACE ${activeProject.place_id}` : "GAME LINK PENDING"}
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between gap-1">
+          <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+            <p className="truncate text-xs font-medium">{user?.displayName ?? "Owner"}</p>
+            <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">Single-owner access</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
             <button
-              onClick={logout}
-              className="p-1 text-muted-foreground hover:text-destructive transition-colors"
-              title="Logout"
+              type="button"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              aria-label={theme === "dark" ? "Switch to light appearance" : "Switch to dark appearance"}
+              title={theme === "dark" ? "Light appearance" : "Dark appearance"}
             >
-              <LogOut className="h-3.5 w-3.5" />
+              {theme === "dark" ? <Sun aria-hidden="true" className="size-4" /> : <Moon aria-hidden="true" className="size-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut aria-hidden="true" className="size-4" />
             </button>
           </div>
-        )}
+        </div>
       </SidebarFooter>
     </Sidebar>
   )

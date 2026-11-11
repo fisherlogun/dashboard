@@ -1,73 +1,62 @@
 "use client"
 
-import { usePathname } from "next/navigation"
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/dashboard/app-sidebar"
-import { useSession } from "@/components/session-provider"
-import { Clock } from "lucide-react"
 import { useEffect, useState } from "react"
+import { LockKeyhole } from "lucide-react"
+import { usePathname } from "next/navigation"
+import { AppSidebar } from "@/components/dashboard/app-sidebar"
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { Separator } from "@/components/ui/separator"
 
-const PAGE_TITLES: Record<string, string> = {
-  "/dashboard": "OVERVIEW",
-  "/dashboard/servers": "SERVERS",
-  "/dashboard/players": "PLAYERS",
-  "/dashboard/commands": "COMMANDS",
-  "/dashboard/bans": "BANS",
-  "/dashboard/logs": "ACTIVITY LOG",
-  "/dashboard/settings": "SETTINGS",
-  "/dashboard/admin": "LICENSES",
+const routeTitles: Record<string, string> = {
+  "/dashboard": "Overview",
+  "/dashboard/servers": "Live servers",
+  "/dashboard/players": "Players",
+  "/dashboard/commands": "Commands",
+  "/dashboard/datastores": "Data stores",
+  "/dashboard/bans": "Moderation",
+  "/dashboard/logs": "Activity log",
+  "/dashboard/settings": "Private settings",
 }
 
-function LiveClock() {
+function LocalClock() {
   const [time, setTime] = useState("")
+
   useEffect(() => {
-    const tick = () => setTime(new Date().toLocaleTimeString("en-US", { hour12: false }))
-    tick()
-    const iv = setInterval(tick, 1000)
-    return () => clearInterval(iv)
+    const update = () => setTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))
+    update()
+    const interval = window.setInterval(update, 30_000)
+    return () => window.clearInterval(interval)
   }, [])
-  return (
-    <span className="font-mono text-[11px] text-muted-foreground tabular-nums flex items-center gap-1.5">
-      <Clock className="h-3 w-3" />
-      {time}
-    </span>
-  )
+
+  return <span className="font-mono text-xs tabular-nums text-muted-foreground">{time || "--:--"}</span>
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const { activeProject } = useSession()
-  const title = PAGE_TITLES[pathname] ?? "DASHBOARD"
+  const title = routeTitles[pathname] ?? "Game operations"
 
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-10 shrink-0 items-center justify-between border-b border-border px-4 bg-card">
-          <div className="flex items-center gap-3">
-            <SidebarTrigger className="-ml-1 text-muted-foreground hover:text-foreground" />
-            <div className="h-4 w-px bg-border" />
-            <span className="font-mono text-[11px] font-bold tracking-widest text-foreground">{title}</span>
-            {activeProject && (
-              <>
-                <div className="h-4 w-px bg-border" />
-                <span className="font-mono text-[10px] text-muted-foreground">
-                  {activeProject.name}
-                </span>
-              </>
-            )}
+      <SidebarInset className="min-w-0">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border/70 bg-background/90 px-4 backdrop-blur-xl sm:px-6">
+          <SidebarTrigger aria-label="Toggle navigation" />
+          <Separator orientation="vertical" className="h-5" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold tracking-tight">{title}</p>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <div className="h-1.5 w-1.5 bg-success led-pulse" />
-              <span className="font-mono text-[10px] text-success">ONLINE</span>
-            </div>
-            <LiveClock />
+          <div className="flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-primary">
+            <LockKeyhole aria-hidden="true" className="size-3" />
+            <span className="hidden sm:inline">Owner session</span>
+            <span className="sm:hidden">Private</span>
           </div>
+          <LocalClock />
         </header>
-        <main className="flex-1 overflow-auto bg-background">
-          <div className="p-4 md:p-6">{children}</div>
-        </main>
+        <main className="mx-auto w-full max-w-[1600px] flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        <footer className="flex min-h-9 items-center justify-between border-t border-border/60 px-4 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground sm:px-6">
+          <span>Scuba Simulator // private operations</span>
+          <span>Owner-only access</span>
+        </footer>
       </SidebarInset>
     </SidebarProvider>
   )

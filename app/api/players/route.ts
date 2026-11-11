@@ -51,15 +51,14 @@ export async function POST(req: NextRequest) {
     await publishMessage(project.universe_id, "DashboardCommands", payload, project.api_key)
 
     const ip = req.headers.get("x-forwarded-for") || "unknown"
-    await addActionLog({
+    await addActionLog(
       projectId,
-      userId: session.userId,
-      userName: session.displayName,
-      action: `player:${action}`,
-      details: `${action} ${targetName || targetUserId}${reason ? ` - ${reason}` : ""}`,
+      session.userId,
+      session.displayName,
+      `player:${action}`,
+      `${action} ${targetName || targetUserId}${reason ? ` - ${reason}` : ""}`,
       ip,
-      status: "success",
-    })
+    )
 
     return NextResponse.json({ success: true })
   } catch (error) {
