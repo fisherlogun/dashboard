@@ -1,5 +1,7 @@
 // Roblox Open Cloud and public game APIs for the private owner console
 
+import { createHash } from "node:crypto"
+
 const ROBLOX_CLOUD_BASE = "https://apis.roblox.com/cloud/v2"
 const ROBLOX_MESSAGING_BASE = "https://apis.roblox.com/messaging-service/v1"
 const ROBLOX_BAN_BASE = "https://apis.roblox.com/cloud/v2"
@@ -29,8 +31,12 @@ export async function publishMessage(
   message: string,
   apiKey: string
 ): Promise<void> {
+  if (Buffer.byteLength(message, "utf8") > 1000) {
+    throw new Error("Roblox MessagingService messages must be under 1 KB")
+  }
+
   const res = await fetch(
-    `${ROBLOX_MESSAGING_BASE}/universes/${universeId}/topics/${topic}`,
+    `${ROBLOX_MESSAGING_BASE}/universes/${universeId}/topics/${encodeURIComponent(topic)}`,
     {
       method: "POST",
       headers: {
@@ -225,14 +231,17 @@ export async function listDatastoreKeys(
   datastoreName: string,
   scope: string,
   apiKey: string,
-  cursor?: string
+  cursor?: string,
+  prefix?: string,
+  limit = 100
 ): Promise<{ keys: { key: string }[]; nextPageCursor: string | null }> {
   const url = new URL(
     `${ROBLOX_DATASTORE_BASE}/universes/${universeId}/standard-datastores/datastore/entries`
   )
   url.searchParams.set("datastoreName", datastoreName)
   url.searchParams.set("scope", scope || "global")
-  url.searchParams.set("limit", "100")
+  url.searchParams.set("limit", String(Math.max(1, Math.min(100, limit))))
+  if (prefix) url.searchParams.set("prefix", prefix)
   if (cursor) url.searchParams.set("cursor", cursor)
 
   const res = await fetch(url.toString(), {
@@ -328,4 +337,123 @@ export async function getUserThumbnail(
   if (!res.ok) return null
   const data = await res.json()
   return data.data?.[0]?.imageUrl ?? null
+}
+
+export interface VersionedDatastoreEntry<T = unknown> {
+  data: T | null
+  version: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export class DatastoreConflictError extends Error {
+  constructor(message = "DataStore entry changed during the update") {
+    super(message)
+    this.name = "DatastoreConflictError"
+  }
+}
+
+function datastoreEntryUrl(universeId: string, datastoreName: string, scope: string, key: string) {
+  const url = new URL(`${ROBLOX_DATASTORE_BASE}/universes/${universeId}/standard-datastores/datastore/entries/entry`)
+  url.searchParams.set("datastoreName", datastoreName)
+  url.searchParams.set("scope", scope || "global")
+  url.searchParams.set("entryKey", key)
+  return url
+}
+
+export async function getVersionedDatastoreEntry<T = unknown>(
+  universeId: string,
+  datastoreName: string,
+  scope: string,
+  key: string,
+  apiKey: string,
+): Promise<VersionedDatastoreEntry<T>> {
+  const response = await fetch(datastoreEntryUrl(universeId, datastoreName, scope, key), {
+    headers: { "x-api-key": apiKey },
+    cache: "no-store",
+  })
+  if (response.status === 404) return { data: null, version: null, createdAt: null, updatedAt: null }
+  if (!response.ok) {
+    throw new Error(`DataStore get failed: ${response.status} ${await response.text()}`)
+  }
+  const etag = response.headers.get("roblox-entry-version") ?? response.headers.get("x-roblox-entry-version") ?? response.headers.get("x-entry-version") ?? response.headers.get("etag")
+  return {
+    data: await response.json() as T,
+    version: etag?.replace(/^\"|\"$/g, "") ?? null,
+    createdAt: response.headers.get("roblox-entry-created-time") ?? response.headers.get("x-roblox-entry-created-time"),
+    updatedAt: response.headers.get("roblox-entry-updated-time") ?? response.headers.get("x-roblox-entry-updated-time"),
+  }
+}
+
+export async function setVersionedDatastoreEntry(
+  universeId: string,
+  datastoreName: string,
+  scope: string,
+  key: string,
+  data: unknown,
+  apiKey: string,
+  matchVersion: string | null,
+): Promise<string | null> {
+  const url = datastoreEntryUrl(universeId, datastoreName, scope, key)
+  if (matchVersion) url.searchParams.set("matchVersion", matchVersion)
+  else url.searchParams.set("exclusiveCreate", "true")
+
+  const body = JSON.stringify(data)
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "Content-Type": "application/json",
+      "content-md5": createHash("md5").update(body).digest("base64"),
+    },
+    body,
+  })
+  if (response.status === 409 || response.status === 412) {
+    throw new DatastoreConflictError()
+  }
+  if (!response.ok) {
+    throw new Error(`DataStore set failed: ${response.status} ${await response.text()}`)
+  }
+  return response.headers.get("roblox-entry-version")?.replace(/^\"|\"$/g, "") ?? null
+}
+
+export async function listDatastoreEntryVersions(
+  universeId: string,
+  datastoreName: string,
+  scope: string,
+  key: string,
+  apiKey: string,
+): Promise<{ versions: Array<{ version: string; createdTime?: string; objectSizeBytes?: number }>; nextPageCursor: string | null }> {
+  const url = new URL(`${ROBLOX_DATASTORE_BASE}/universes/${universeId}/standard-datastores/datastore/entries/entry/versions`)
+  url.searchParams.set("datastoreName", datastoreName)
+  url.searchParams.set("scope", scope || "global")
+  url.searchParams.set("entryKey", key)
+  url.searchParams.set("limit", "20")
+  const response = await fetch(url, { headers: { "x-api-key": apiKey }, cache: "no-store" })
+  if (!response.ok) throw new Error(`DataStore versions failed: ${response.status} ${await response.text()}`)
+  const result = await response.json()
+  const versions = (result.versions ?? []).map((version: Record<string, unknown>) => ({
+    version: String(version.version ?? version.versionId ?? ""),
+    createdTime: typeof version.createdTime === "string" ? version.createdTime : typeof version.createdAt === "string" ? version.createdAt : undefined,
+    objectSizeBytes: typeof version.objectSizeBytes === "number" ? version.objectSizeBytes : undefined,
+  })).filter((version: { version: string }) => version.version)
+  return { versions, nextPageCursor: result.nextPageCursor ?? null }
+}
+
+export async function getDatastoreEntryVersion(
+  universeId: string,
+  datastoreName: string,
+  scope: string,
+  key: string,
+  versionId: string,
+  apiKey: string,
+): Promise<unknown> {
+  const url = new URL(`${ROBLOX_DATASTORE_BASE}/universes/${universeId}/standard-datastores/datastore/entries/entry/versions/version`)
+  url.searchParams.set("datastoreName", datastoreName)
+  url.searchParams.set("scope", scope || "global")
+  url.searchParams.set("entryKey", key)
+  url.searchParams.set("versionId", versionId)
+  const response = await fetch(url, { headers: { "x-api-key": apiKey }, cache: "no-store" })
+  if (!response.ok) throw new Error(`DataStore version read failed: ${response.status} ${await response.text()}`)
+  return response.json()
 }

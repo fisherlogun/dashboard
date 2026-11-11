@@ -127,6 +127,9 @@ local function getPlayerSnapshot()
       displayName = player.DisplayName,
       accountAge = player.AccountAge,
       playTime = math.max(0, now - (joinedAt[player.UserId] or now)),
+      level = player:GetAttribute("Level"),
+      cash = player:GetAttribute("Cash"),
+      island = player:GetAttribute("Island"),
     }
   end
 
@@ -136,6 +139,7 @@ end
 
 local function sendHeartbeat()
   local playerList, averagePing = getPlayerSnapshot()
+  local gameFolder = ReplicatedStorage:FindFirstChild("DeepDive")
   local ok = postWithRetry("/api/relay/heartbeat", {
     projectId = PROJECT_ID,
     serverId = serverId,
@@ -146,6 +150,10 @@ local function sendHeartbeat()
     ping = averagePing,
     uptime = math.floor(workspace.DistributedGameTime),
     playerList = playerList,
+    event = gameFolder and gameFolder:GetAttribute("EventId") or nil,
+    eventName = gameFolder and gameFolder:GetAttribute("EventName") or nil,
+    eventEnds = gameFolder and gameFolder:GetAttribute("EventEnds") or nil,
+    eventSource = gameFolder and gameFolder:GetAttribute("EventSource") or nil,
   })
   return ok
 end
@@ -248,10 +256,17 @@ local function handleCommand(raw)
   local message = tostring(command.message or "")
   local issuedBy = tostring(command.issuedBy or "Owner")
   local targetUserId = command.userId or command.targetUserId or command.playerId
+  local otherServer = command.serverId ~= nil and command.serverId ~= "" and tostring(command.serverId) ~= serverId
 
   if commandType == "announce" then
-    announcementRemote:FireAllClients(message, issuedBy)
+    if otherServer then return end
+    announcementRemote:FireAllClients(message, issuedBy, {
+      title = command.title,
+      style = command.style,
+      duration = tonumber(command.duration),
+    })
   elseif commandType == "warn" then
+    if otherServer then return end
     if targetUserId then
       local target = findPlayer(targetUserId)
       if target then warningRemote:FireClient(target, message, issuedBy) end

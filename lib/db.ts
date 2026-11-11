@@ -241,14 +241,20 @@ export async function upsertLiveServer(data: {
   fps: number
   ping: number
   uptime: number
+  event?: string | null
+  eventName?: string | null
+  eventEnds?: number | null
+  eventSource?: string | null
 }) {
   const q = sql()
   await q`
-    INSERT INTO live_servers (id, project_id, place_id, players, max_players, fps, ping, uptime, last_heartbeat)
-    VALUES (${data.id}, ${data.projectId}, ${data.placeId}, ${data.players}, ${data.maxPlayers}, ${data.fps}, ${data.ping}, ${data.uptime}, NOW())
+    INSERT INTO live_servers (id, project_id, place_id, players, max_players, fps, ping, uptime, event, event_name, event_ends, event_source, last_heartbeat)
+    VALUES (${data.id}, ${data.projectId}, ${data.placeId}, ${data.players}, ${data.maxPlayers}, ${data.fps}, ${data.ping}, ${data.uptime}, ${data.event ?? null}, ${data.eventName ?? null}, ${data.eventEnds ?? null}, ${data.eventSource ?? null}, NOW())
     ON CONFLICT (id, project_id) DO UPDATE SET
       players = ${data.players}, max_players = ${data.maxPlayers},
       fps = ${data.fps}, ping = ${data.ping}, uptime = ${data.uptime},
+      event = ${data.event ?? null}, event_name = ${data.eventName ?? null},
+      event_ends = ${data.eventEnds ?? null}, event_source = ${data.eventSource ?? null},
       last_heartbeat = NOW()
   `
 }
@@ -299,15 +305,19 @@ export async function upsertLivePlayer(data: {
   playTime: number
   accountAge: number
   avatarUrl: string | null
+  level?: number | null
+  cash?: number | null
+  island?: string | null
 }): Promise<boolean> {
   const q = sql()
   const result = await q`
-    INSERT INTO live_players (user_id, project_id, server_id, display_name, username, play_time, account_age, avatar_url, last_heartbeat)
-    VALUES (${data.userId}, ${data.projectId}, ${data.serverId}, ${data.displayName}, ${data.username}, ${data.playTime}, ${data.accountAge}, ${data.avatarUrl}, NOW())
+    INSERT INTO live_players (user_id, project_id, server_id, display_name, username, play_time, account_age, avatar_url, level, cash, island, last_heartbeat)
+    VALUES (${data.userId}, ${data.projectId}, ${data.serverId}, ${data.displayName}, ${data.username}, ${data.playTime}, ${data.accountAge}, ${data.avatarUrl}, ${data.level ?? null}, ${data.cash ?? null}, ${data.island ?? null}, NOW())
     ON CONFLICT (user_id, project_id) DO UPDATE SET
       server_id = ${data.serverId}, display_name = ${data.displayName}, username = ${data.username},
       play_time = ${data.playTime}, account_age = ${data.accountAge},
-      avatar_url = COALESCE(${data.avatarUrl}, live_players.avatar_url), last_heartbeat = NOW()
+      avatar_url = COALESCE(${data.avatarUrl}, live_players.avatar_url),
+      level = ${data.level ?? null}, cash = ${data.cash ?? null}, island = ${data.island ?? null}, last_heartbeat = NOW()
     RETURNING (xmax = 0) AS is_new
   `
   return result?.[0]?.is_new === true

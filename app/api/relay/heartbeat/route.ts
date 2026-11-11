@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     if (!apiKey) return NextResponse.json({ error: "Missing x-api-key" }, { status: 401 })
 
     const body = await req.json()
-    const { projectId, serverId, placeId, players, maxPlayers, fps, ping, uptime, playerList } = body
+    const { projectId, serverId, placeId, players, maxPlayers, fps, ping, uptime, playerList, event, eventName, eventEnds, eventSource } = body
 
     if (!projectId || !serverId) {
       return NextResponse.json({ error: "projectId and serverId required" }, { status: 400 })
@@ -34,6 +34,10 @@ export async function POST(req: NextRequest) {
       fps: fps ?? 60,
       ping: ping ?? 0,
       uptime: uptime ?? 0,
+      event: typeof event === "string" ? event.slice(0, 80) : null,
+      eventName: typeof eventName === "string" ? eventName.slice(0, 100) : null,
+      eventEnds: Number.isSafeInteger(eventEnds) && eventEnds > 0 ? eventEnds : null,
+      eventSource: typeof eventSource === "string" && ["auto", "admin", "schedule"].includes(eventSource) ? eventSource : null,
     })
 
     // PlayerAdded posts joins immediately; this path is a fallback for players already present on startup.
@@ -66,6 +70,9 @@ export async function POST(req: NextRequest) {
           playTime: Number.isFinite(p.playTime) ? Math.max(0, p.playTime) : 0,
           accountAge: Number.isFinite(p.accountAge) ? Math.max(0, p.accountAge) : 0,
           avatarUrl,
+          level: Number.isSafeInteger(p.level) && p.level >= 0 ? p.level : null,
+          cash: Number.isSafeInteger(p.cash) && p.cash >= 0 ? p.cash : null,
+          island: typeof p.island === "string" ? p.island.slice(0, 80) : null,
         })
 
         if (isNewToLiveSet) {

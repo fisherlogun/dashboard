@@ -4,13 +4,15 @@ import { useState } from "react"
 import { useSession } from "@/components/session-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
   Server, Users, RefreshCw, Wifi, Cpu, Power, ChevronDown, ChevronUp,
-  Megaphone, Send, Loader2, AlertTriangle, Clock,
+  Megaphone, Send, Loader2, AlertTriangle, Clock, Sparkles,
 } from "lucide-react"
 import { toast } from "sonner"
 import useSWR from "swr"
@@ -23,6 +25,9 @@ interface ServerPlayer {
   username: string
   play_time: number
   avatar_url: string
+  level: number | null
+  cash: number | null
+  island: string | null
 }
 
 interface ServerData {
@@ -33,6 +38,10 @@ interface ServerData {
   ping: number
   uptime: number
   last_heartbeat: string
+  event: string | null
+  event_name: string | null
+  event_ends: number | null
+  event_source: string | null
   playerList: ServerPlayer[]
 }
 
@@ -48,6 +57,9 @@ export default function ServersPage() {
   const [shutdownTarget, setShutdownTarget] = useState<ServerData | null>(null)
   const [shuttingDown, setShuttingDown] = useState(false)
   const [announceMsg, setAnnounceMsg] = useState("")
+  const [announceTitle, setAnnounceTitle] = useState("")
+  const [announceStyle, setAnnounceStyle] = useState("announcement")
+  const [announceDuration, setAnnounceDuration] = useState("8")
   const [announcing, setAnnouncing] = useState(false)
 
   const servers: ServerData[] = data?.servers ?? []
@@ -76,9 +88,9 @@ export default function ServersPage() {
       const res = await fetch("/api/servers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: activeProject.id, action: "announce", serverId, message: announceMsg.trim() }),
+        body: JSON.stringify({ projectId: activeProject.id, action: "announce", serverId, message: announceMsg.trim(), title: announceTitle.trim(), style: announceStyle, duration: Number(announceDuration) }),
       })
-      if (res.ok) { toast.success("Announcement sent"); setAnnounceMsg("") }
+      if (res.ok) { toast.success("Announcement sent"); setAnnounceMsg(""); setAnnounceTitle("") }
       else toast.error("Failed")
     } catch { toast.error("Network error") }
     finally { setAnnouncing(false) }
@@ -159,6 +171,7 @@ export default function ServersPage() {
                         <span className="font-mono text-[10px] text-muted-foreground flex items-center gap-1">
                           <Clock className="h-3 w-3" />{formatUptime(server.uptime)}
                         </span>
+                        {server.event && <span className="flex items-center gap-1 font-mono text-[10px] text-primary"><Sparkles className="h-3 w-3" />{server.event_name || server.event}</span>}
                       </div>
                     </div>
                   </div>
@@ -181,12 +194,13 @@ export default function ServersPage() {
                 {isOpen && (
                   <div className="border-t border-border bg-muted/20 p-4 space-y-4">
                     {/* Metrics */}
-                    <div className="grid grid-cols-4 gap-px bg-border border border-border">
+                    <div className="grid grid-cols-2 gap-px border border-border bg-border md:grid-cols-5">
                       {[
                         { label: "Players", value: server.players, color: "text-primary" },
                         { label: "Capacity", value: server.max_players, color: "text-foreground" },
                         { label: "FPS", value: server.fps, color: fpsColor },
                         { label: "Ping", value: `${server.ping}ms`, color: pingColor },
+                        { label: "Event", value: server.event_name || "None", color: server.event ? "text-primary" : "text-muted-foreground" },
                       ].map(m => (
                         <div key={m.label} className="bg-card p-3 text-center">
                           <span className={`font-mono text-lg font-bold ${m.color} block`}>{m.value}</span>
@@ -208,6 +222,7 @@ export default function ServersPage() {
                               <div className="min-w-0">
                                 <span className="font-mono text-[10px] text-foreground truncate block">{p.display_name}</span>
                                 <span className="font-mono text-[9px] text-muted-foreground truncate block">{p.user_id}</span>
+                                <span className="font-mono text-[9px] text-muted-foreground truncate block">Lv {p.level ?? "—"} · ${p.cash?.toLocaleString() ?? "—"} · {p.island ?? "—"}</span>
                               </div>
                             </div>
                           ))}
@@ -222,12 +237,13 @@ export default function ServersPage() {
                       <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 mb-2">
                         <Megaphone className="h-3 w-3" /> ANNOUNCE
                       </span>
-                      <div className="flex gap-2">
-                        <Input value={announceMsg} onChange={e => setAnnounceMsg(e.target.value)} placeholder="Message..." className="font-mono text-xs h-7 bg-card" onKeyDown={e => { if (e.key === "Enter" && announceMsg.trim()) handleAnnounce(server.id) }} />
-                        <Button size="sm" className="font-mono text-[10px] h-7 gap-1" disabled={!announceMsg.trim() || announcing} onClick={() => handleAnnounce(server.id)}>
-                          {announcing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-                          SEND
-                        </Button>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="flex flex-col gap-1"><Label htmlFor={`server-announce-title-${server.id}`} className="text-[10px] text-muted-foreground">Title</Label><Input id={`server-announce-title-${server.id}`} value={announceTitle} maxLength={60} onChange={(e) => setAnnounceTitle(e.target.value)} placeholder="Optional title" className="h-7 bg-card font-mono text-xs" /></div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="flex flex-col gap-1"><Label className="text-[10px] text-muted-foreground">Style</Label><Select value={announceStyle} onValueChange={setAnnounceStyle}><SelectTrigger className="h-7 font-mono text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="announcement">Announcement</SelectItem><SelectItem value="update">Update</SelectItem><SelectItem value="event">Event</SelectItem><SelectItem value="warning">Warning</SelectItem><SelectItem value="maintenance">Maintenance</SelectItem></SelectGroup></SelectContent></Select></div>
+                          <div className="flex flex-col gap-1"><Label htmlFor={`server-announce-duration-${server.id}`} className="text-[10px] text-muted-foreground">Duration · {announceDuration}s</Label><input id={`server-announce-duration-${server.id}`} type="range" min={5} max={30} value={announceDuration} onChange={(e) => setAnnounceDuration(e.target.value)} className="w-full accent-primary" aria-label="Announcement card duration in seconds" /></div>
+                        </div>
+                        <div className="flex gap-2 sm:col-span-2"><Input value={announceMsg} maxLength={200} onChange={e => setAnnounceMsg(e.target.value)} placeholder="Message..." className="h-7 bg-card font-mono text-xs" onKeyDown={e => { if (e.key === "Enter" && announceMsg.trim() && !e.nativeEvent.isComposing && e.keyCode !== 229) handleAnnounce(server.id) }} /><Button size="sm" className="h-7 gap-1 font-mono text-[10px]" disabled={!announceMsg.trim() || announcing} onClick={() => handleAnnounce(server.id)}>{announcing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}SEND</Button></div>
                       </div>
                     </div>
 

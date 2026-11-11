@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { getProjectById, getMemberRole } from "@/lib/db"
+import { addActionLog, getProjectById, getMemberRole } from "@/lib/db"
 import {
   listDatastores,
   listDatastoreKeys,
-  getDatastoreEntry,
-  setDatastoreEntry,
+  getVersionedDatastoreEntry,
+  setVersionedDatastoreEntry,
+  DatastoreConflictError,
 } from "@/lib/roblox"
 import { z } from "zod"
 
@@ -51,13 +52,14 @@ export async function GET(request: NextRequest) {
       const scope = searchParams.get("scope") ?? "global"
       const key = searchParams.get("key")
       if (!name || !key) return NextResponse.json({ error: "name and key are required" }, { status: 400 })
-      const data = await getDatastoreEntry(project.universe_id, name, scope, key, project.api_key)
-      return NextResponse.json({ data })
+      const entry = await getVersionedDatastoreEntry(project.universe_id, name, scope, key, project.api_key)
+      return NextResponse.json(entry)
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
+    const status = error instanceof DatastoreConflictError ? 409 : 500
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status })
   }
 }
 
@@ -67,6 +69,7 @@ const setSchema = z.object({
   scope: z.string().default("global"),
   key: z.string().min(1),
   data: z.unknown(),
+  expectedVersion: z.string().nullable(),
 })
 
 export async function POST(request: NextRequest) {
@@ -78,15 +81,18 @@ export async function POST(request: NextRequest) {
     const parsed = setSchema.safeParse(body)
     if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 })
 
-    const { projectId, name, scope, key, data } = parsed.data
+    const { projectId, name, scope, key, data, expectedVersion } = parsed.data
+    if (!data || typeof data !== "object" || Array.isArray(data)) return NextResponse.json({ error: "DataStore values must be JSON objects" }, { status: 400 })
     const project = await getProjectById(projectId)
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
     const role = await getMemberRole(projectId, session.userId)
     if (!role) return NextResponse.json({ error: "Not a member" }, { status: 403 })
 
-    await setDatastoreEntry(project.universe_id, name, scope, key, data, project.api_key)
-    return NextResponse.json({ success: true })
+    const version = await setVersionedDatastoreEntry(project.universe_id, name, scope, key, data, project.api_key, expectedVersion)
+    await addActionLog(projectId, session.userId, session.displayName, "datastore-write", JSON.stringify({ who: session.displayName, what: "datastore-write", target: { name, scope, key }, payload: data }))
+    return NextResponse.json({ success: true, version })
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
+    const status = error instanceof DatastoreConflictError ? 409 : 500
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status })
   }
 }

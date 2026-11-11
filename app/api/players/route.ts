@@ -37,16 +37,22 @@ export async function POST(req: NextRequest) {
     const project = await getProject(projectId)
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
 
-    const payload = JSON.stringify({
+    if (!["kick", "warn", "message"].includes(action)) return NextResponse.json({ error: "Invalid player action" }, { status: 400 })
+    if (!/^\d{1,20}$/.test(String(targetUserId))) return NextResponse.json({ error: "A valid numeric user ID is required" }, { status: 400 })
+    if (typeof reason === "string" && reason.length > 500) return NextResponse.json({ error: "Reason is too long" }, { status: 400 })
+    if (typeof message === "string" && message.length > 200) return NextResponse.json({ error: "Message must be at most 200 characters" }, { status: 400 })
+
+    const commandMessage = action === "kick" || action === "warn" ? String(reason || message || "") : String(message || "")
+    const command = {
       type: action,
       userId: String(targetUserId),
-      displayName: targetName || "Unknown",
-      reason: reason || "",
-      message: message || "",
+      displayName: typeof targetName === "string" ? targetName.slice(0, 80) : "Unknown",
+      message: commandMessage,
       duration: duration || "permanent",
       issuedBy: session.displayName,
       issuedAt: new Date().toISOString(),
-    })
+    }
+    const payload = JSON.stringify(command)
 
     await publishMessage(project.universe_id, "DashboardCommands", payload, project.api_key)
 
@@ -56,7 +62,7 @@ export async function POST(req: NextRequest) {
       session.userId,
       session.displayName,
       `player:${action}`,
-      `${action} ${targetName || targetUserId}${reason ? ` - ${reason}` : ""}`,
+      JSON.stringify({ who: session.displayName, what: action, target: String(targetUserId), payload: command }),
       ip,
     )
 
