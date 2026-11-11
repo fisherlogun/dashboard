@@ -6,7 +6,8 @@ import { useSession } from "@/components/session-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Activity, ArrowUpRight, Ban, CalendarClock, Gauge, RefreshCw, Server, ShieldCheck, Signal, Sparkles, Users, Waves } from "lucide-react"
+import { Activity, ArrowUpRight, Ban, CalendarClock, Gauge, Server, Signal, Sparkles, Users } from "lucide-react"
+import { ExperienceHero } from "@/components/dashboard/overview/experience-hero"
 import { MetricCard } from "@/components/dashboard/overview/metric-card"
 import { PlayerHistoryChart, type HistoryPoint } from "@/components/dashboard/overview/player-history-chart"
 import { RecentJoins, type JoinEvent } from "@/components/dashboard/overview/recent-joins"
@@ -111,54 +112,22 @@ export function OverviewDashboard() {
 
   return (
     <div className="flex flex-col gap-6 sm:gap-7">
-      <section className="relative isolate overflow-hidden rounded-2xl border border-border/70 bg-card">
-        {data?.game?.thumbnail && (
-          <img
-            src={data.game.thumbnail}
-            alt=""
-            aria-hidden="true"
-            className="absolute inset-0 size-full object-cover opacity-30 blur-[1px]"
-          />
-        )}
-        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-background via-background/90 to-background/55" />
-        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
-        <div className="relative grid gap-6 p-5 sm:p-7 lg:grid-cols-[1fr_auto] lg:items-end">
-          <div>
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="gap-1.5 border-primary/30 bg-background/50 text-primary">
-                <ShieldCheck aria-hidden="true" className="size-3" /> PRIVATE OWNER CONSOLE
-              </Badge>
-              <Badge variant="secondary" className="font-mono text-[10px] tracking-wide">UNIVERSE {activeProject.universe_id}</Badge>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="mt-1 flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-                <Waves aria-hidden="true" className="size-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Experience control</p>
-                <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">{gameName}</h1>
-                <p className="mt-2 max-w-xl text-sm text-muted-foreground">Live servers, players, moderation and game data in one owner-only workspace.</p>
-              </div>
-            </div>
-            <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5"><span className={`size-1.5 rounded-full ${error ? "bg-destructive" : data?.servers ? "bg-primary" : "bg-muted-foreground"}`} />{error ? "TELEMETRY ERROR" : data?.servers ? "LIVE RELAY" : heartbeatAgeSeconds === null ? "NO RELAY HISTORY" : "NO LIVE SERVERS"}</span>
-              {data?.game && <span>{data.game.playing.toLocaleString()} playing on Roblox</span>}
-              <a href="https://www.roblox.com/games/139373122825390/Scuba-Simulator" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
-                Open experience <ArrowUpRight aria-hidden="true" className="size-3" />
-              </a>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => void mutate()} disabled={isValidating}>
-              <RefreshCw data-icon="inline-start" className={isValidating ? "animate-spin" : ""} />
-              Refresh
-            </Button>
-            <Button type="button" variant="destructive" onClick={() => void shutDownAllServers()} disabled={!data?.servers}>
-              <Server data-icon="inline-start" /> Shut down all
-            </Button>
-          </div>
-        </div>
-      </section>
+      <ExperienceHero
+        gameName={gameName}
+        projectName={activeProject.name}
+        universeId={activeProject.universe_id}
+        placeId={activeProject.place_id}
+        thumbnail={data?.game?.thumbnail ?? null}
+        players={data?.players ?? 0}
+        servers={data?.servers ?? 0}
+        totalCapacity={data?.totalCapacity ?? 0}
+        publicPlaying={data?.game?.playing ?? 0}
+        heartbeatAgeSeconds={heartbeatAgeSeconds}
+        hasError={Boolean(error)}
+        isRefreshing={isValidating}
+        onRefresh={() => void mutate()}
+        onShutdown={() => void shutDownAllServers()}
+      />
 
       {error && (
         <div role="alert" className="rounded-xl border border-destructive/25 bg-destructive/5 px-4 py-3 text-sm text-destructive">

@@ -1,10 +1,11 @@
 import type { Metadata, Viewport } from 'next'
-import { JetBrains_Mono } from 'next/font/google'
+import { JetBrains_Mono, Manrope } from 'next/font/google'
 import { SessionProvider } from '@/components/session-provider'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from 'sonner'
 import './globals.css'
 
+const _manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" })
 const _jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains-mono" })
 
 export const metadata: Metadata = {
@@ -29,7 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${_jetbrains.variable} font-sans antialiased bg-background text-foreground`}>
+      <body className={`${_manrope.variable} ${_jetbrains.variable} font-sans antialiased bg-background text-foreground`}>
         <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark" storageKey="scuba-theme">
           <SessionProvider>
             {children}
