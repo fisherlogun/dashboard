@@ -85,20 +85,52 @@ function validateProfile(profile: Record<string, unknown>, fields: string[] = Ob
       throw new ProfileApiError(400, `${field} must be a valid integer between ${range.min} and ${range.max}`)
     }
   }
-  if (fields.includes("Island") && profile.Island !== undefined && profile.Island !== "" && !ISLAND_IDS.has(String(profile.Island))) throw new ProfileApiError(400, "Unknown island")
+  if (fields.includes("Island") && profile.Island !== undefined && (typeof profile.Island !== "string" || (profile.Island !== "" && !ISLAND_IDS.has(profile.Island)))) throw new ProfileApiError(400, "Unknown island")
+
+  if (fields.includes("BackpackSize") && profile.BackpackSize !== undefined) {
+    if (!isPlainRecord(profile.BackpackSize) || Object.values(profile.BackpackSize).some((value) => typeof value !== "number" || !Number.isFinite(value) || value < 0)) throw new ProfileApiError(400, "BackpackSize values must be non-negative numbers")
+  }
+  if (fields.includes("Settings") && profile.Settings !== undefined) {
+    if (!isPlainRecord(profile.Settings) || Object.values(profile.Settings).some((value) => typeof value !== "boolean")) throw new ProfileApiError(400, "Settings values must be booleans")
+  }
+  if (fields.includes("Cosmetics") && profile.Cosmetics !== undefined) {
+    if (!isPlainRecord(profile.Cosmetics) || Object.values(profile.Cosmetics).some((value) => typeof value !== "boolean")) throw new ProfileApiError(400, "Cosmetics values must be booleans")
+  }
+  if (fields.includes("Traps") && profile.Traps !== undefined) {
+    if (!isPlainRecord(profile.Traps)) throw new ProfileApiError(400, "Traps must be an object")
+    for (const [island, trap] of Object.entries(profile.Traps)) {
+      if (!ISLAND_IDS.has(island) && sameValue((isPlainRecord(baseData.Traps) ? baseData.Traps : {})[island], trap)) continue
+      if (!ISLAND_IDS.has(island) || !isPlainRecord(trap) || ["since", "cap", "bait"].some((key) => !Number.isSafeInteger(trap[key]) || Number(trap[key]) < 0)) throw new ProfileApiError(400, `Invalid trap data for ${island}`)
+    }
+  }
+  for (const field of ["TutorialDone", "TutorialGift", "FirstCatch"]) {
+    if (fields.includes(field) && profile[field] !== undefined && typeof profile[field] !== "boolean") throw new ProfileApiError(400, `${field} must be a boolean`)
+  }
 
   if (fields.includes("Zones") && profile.Zones !== undefined) {
-    if (!isPlainRecord(profile.Zones) || Object.values(profile.Zones).some((value) => typeof value !== "boolean")) throw new ProfileApiError(400, "Zones values must be booleans")
+    if (!isPlainRecord(profile.Zones)) throw new ProfileApiError(400, "Zones must be an object")
+    const baseZones = isPlainRecord(baseData.Zones) ? baseData.Zones : {}
+    for (const [id, value] of Object.entries(profile.Zones)) {
+      if (!ISLAND_IDS.has(id) && sameValue(baseZones[id], value)) continue
+      if (!ISLAND_IDS.has(id) || typeof value !== "boolean") throw new ProfileApiError(400, "Zones contains an invalid island value")
+    }
   }
   if (fields.includes("Owned") && profile.Owned !== undefined) {
-    if (!isPlainRecord(profile.Owned) || Object.values(profile.Owned).some((value) => typeof value !== "boolean")) throw new ProfileApiError(400, "Owned values must be booleans")
+    if (!isPlainRecord(profile.Owned)) throw new ProfileApiError(400, "Owned must be an object")
+    const baseOwned = isPlainRecord(baseData.Owned) ? baseData.Owned : {}
+    for (const [id, value] of Object.entries(profile.Owned)) {
+      if (!GEAR_IDS.has(id) && sameValue(baseOwned[id], value)) continue
+      if (!GEAR_IDS.has(id) || typeof value !== "boolean") throw new ProfileApiError(400, "Owned contains invalid gear")
+    }
   }
   if (fields.includes("Equipped") && profile.Equipped !== undefined) {
     if (!isPlainRecord(profile.Equipped)) throw new ProfileApiError(400, "Equipped must be an object")
     for (const [slot, gearId] of Object.entries(profile.Equipped)) {
       if (typeof gearId !== "string") throw new ProfileApiError(400, `Invalid equipped gear for ${slot}`)
       const options = GEAR_BY_SLOT[slot as keyof typeof GEAR_BY_SLOT]
-      if (options && gearId !== "" && !options.some(([id]) => id === gearId)) throw new ProfileApiError(400, `Invalid equipped gear for ${slot}`)
+      const baseEquipped = isPlainRecord(baseData.Equipped) ? baseData.Equipped : {}
+      if (!options && sameValue(baseEquipped[slot], gearId)) continue
+      if (!options || (gearId !== "" && !options.some(([id]) => id === gearId))) throw new ProfileApiError(400, `Invalid equipped gear for ${slot}`)
     }
   }
   if (fields.includes("Backpack") && profile.Backpack !== undefined) {
@@ -123,7 +155,7 @@ function validateProfile(profile: Record<string, unknown>, fields: string[] = Ob
     const baseVaults = isPlainRecord(baseData.Vaults) ? baseData.Vaults : {}
     for (const [id, value] of Object.entries(profile.Vaults)) {
       if (!SECRET_SITES.some((site) => site.id === id) && sameValue(baseVaults[id], value)) continue
-      if (!SECRET_SITES.some((site) => site.id === id) || !isPlainRecord(value) || typeof value.found !== "boolean") throw new ProfileApiError(400, "Vaults contains an invalid secret site")
+      if (!SECRET_SITES.some((site) => site.id === id) || !isPlainRecord(value) || typeof value.found !== "boolean" || (value.readyAt !== undefined && (!Number.isSafeInteger(value.readyAt) || Number(value.readyAt) < 0))) throw new ProfileApiError(400, "Vaults contains an invalid secret site")
     }
   }
 }
@@ -318,6 +350,7 @@ async function checkPlayerOffline(projectId: string, project: { universe_id: str
 }
 
 async function saveProfileChanges(
+  projectId: string,
   project: { universe_id: string; api_key: string },
   userId: string,
   expectedVersion: string | null,
@@ -334,6 +367,8 @@ async function saveProfileChanges(
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const current = await getVersionedDatastoreEntry<Record<string, unknown>>(project.universe_id, PROFILE_STORE, "global", `u_${userId}`, project.api_key)
     if (!current.data) throw new ProfileApiError(404, "Player profile not found")
+    const liveIds = await getLiveIds(projectId)
+    if (isOnline(userId, current.data, liveIds)) throw new ProfileApiError(409, "Player is online. Use a grant instead of saving their profile directly.")
     const conflicts = current.version !== expectedVersion
       ? changedKeys.filter((key) => !sameValue(current.data?.[key], baseData[key]))
       : []
@@ -388,7 +423,7 @@ export async function POST(request: NextRequest) {
 
     if (input.action === "save-profile") {
       const current = await checkPlayerOffline(input.projectId, project, input.userId)
-      const saved = await saveProfileChanges(project, input.userId, input.expectedVersion, input.baseData, input.data)
+      const saved = await saveProfileChanges(input.projectId, project, input.userId, input.expectedVersion, input.baseData, input.data)
       await logProfileWrite(input.projectId, session.userId, session.displayName, "profile-save", input.userId, { changedKeys: saved.changedKeys, payload: Object.fromEntries(saved.changedKeys.map((key) => [key, saved.data[key]])), previousVersion: current.version })
       return NextResponse.json({ success: true, version: (await getVersionedDatastoreEntry(project.universe_id, PROFILE_STORE, "global", `u_${input.userId}`, project.api_key)).version })
     }
@@ -397,8 +432,14 @@ export async function POST(request: NextRequest) {
       const current = await checkPlayerOffline(input.projectId, project, input.userId)
       const previous = await getDatastoreEntryVersion(project.universe_id, PROFILE_STORE, "global", `u_${input.userId}`, input.versionId, project.api_key)
       if (!isPlainRecord(previous)) return NextResponse.json({ error: "Selected version is not a profile object" }, { status: 400 })
+      const [latest, liveIds] = await Promise.all([
+        getVersionedDatastoreEntry<Record<string, unknown>>(project.universe_id, PROFILE_STORE, "global", `u_${input.userId}`, project.api_key),
+        getLiveIds(input.projectId),
+      ])
+      if (!latest.data) throw new ProfileApiError(404, "Player profile not found")
+      if (isOnline(input.userId, latest.data, liveIds)) throw new ProfileApiError(409, "Player is online. Restore is disabled while they are playing.")
       await setVersionedDatastoreEntry(project.universe_id, PROFILE_STORE, "global", `u_${input.userId}`, previous, project.api_key, current.version)
-      await logProfileWrite(input.projectId, session.userId, session.displayName, "profile-restore", input.userId, { versionId: input.versionId, profile: previous })
+      await logProfileWrite(input.projectId, session.userId, session.displayName, "profile-restore", input.userId, { versionId: input.versionId, profile: previous, previousVersion: current.version })
       return NextResponse.json({ success: true })
     }
 

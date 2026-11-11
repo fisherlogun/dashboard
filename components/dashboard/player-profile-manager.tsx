@@ -159,6 +159,29 @@ function ProfileEditor({ profile, onSaved }: { profile: ProfileData; onSaved: ()
   )
 }
 
+function ProfileActivityHistory({ userId }: { userId: string }) {
+  const { activeProject } = useSession()
+  const { data, error, isLoading } = useSWR<{ logs: Array<{ id: string | number; action: string; user_name?: string; details?: string; created_at?: string }> }>(
+    activeProject ? `/api/logs?projectId=${encodeURIComponent(activeProject.id)}` : null,
+    fetcher,
+  )
+  const history = (data?.logs ?? []).filter((log) => {
+    if (!["player-grant", "player-grant-cancel", "profile-save", "profile-restore"].includes(log.action)) return false
+    try {
+      const details = JSON.parse(log.details ?? "{}") as { target?: unknown }
+      const target = details.target
+      if (target === userId) return true
+      if (target && typeof target === "object") {
+        const values = target as Record<string, unknown>
+        return values.userId === userId || values.key === `u_${userId}` || values.key === `grants_${userId}`
+      }
+    } catch { return false }
+    return false
+  }).slice(0, 6)
+
+  return <Card><CardHeader><CardTitle>Recent activity</CardTitle><CardDescription>Recent profile and grant changes from the Activity Log.</CardDescription></CardHeader><CardContent className="flex flex-col gap-2">{error ? <p role="alert" className="text-sm text-muted-foreground">Activity history is unavailable for this account.</p> : isLoading ? <p className="text-sm text-muted-foreground">Loading recent activity…</p> : history.length ? history.map((log) => <div key={log.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/70 px-3 py-2"><div><p className="text-sm font-medium">{log.action.replaceAll("-", " ")}</p><p className="text-xs text-muted-foreground">By {log.user_name || "Unknown"}</p></div><time className="text-xs text-muted-foreground">{shortDate(log.created_at)}</time></div>) : <p className="text-sm text-muted-foreground">No profile or grant actions recorded yet.</p>}</CardContent></Card>
+}
+
 function PendingGrantList({ grants, userId, onChanged }: { grants: Array<Record<string, unknown>>; userId: string; onChanged: () => void }) {
   const { activeProject } = useSession()
   const [removing, setRemoving] = useState<string | null>(null)
@@ -212,8 +235,9 @@ export function PlayerProfileManager() {
         <div className="flex min-w-0 flex-col gap-5">{!selectedUserId ? <Card className="flex min-h-64 items-center justify-center border-dashed"><CardContent className="pt-6 text-center"><UserRound aria-hidden="true" className="mx-auto size-8 text-muted-foreground" /><p className="mt-3 text-sm font-medium">Select a player</p><p className="mt-1 text-xs text-muted-foreground">Choose a player from the list to open their profile and tools.</p></CardContent></Card> : profileLoading ? <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading player profile…</CardContent></Card> : profileError || !profile ? <Card><CardContent className="flex flex-col gap-3 py-8 text-center"><p role="alert" className="text-sm text-destructive">{profileError?.message ?? "Player profile unavailable"}</p><Button type="button" variant="outline" onClick={() => router.replace("/dashboard/profiles")}>Back to all players</Button></CardContent></Card> : <>
           <Card className="border-border/70 bg-card/80"><CardHeader className="flex flex-row items-center justify-between gap-4"><div className="flex min-w-0 items-center gap-3"><Avatar className="size-12"><AvatarImage src={profile.user.avatarUrl ?? undefined} alt="" /><AvatarFallback>{profile.user.displayName.slice(0, 2).toUpperCase()}</AvatarFallback></Avatar><div className="min-w-0"><CardTitle className="truncate">{profile.user.displayName}</CardTitle><CardDescription className="truncate">@{profile.user.username} · {profile.user.userId}</CardDescription></div></div><div className="flex items-center gap-2"><Badge variant={profile.online ? "default" : "secondary"}>{profile.online ? "Online" : "Offline"}</Badge><Button type="button" variant="ghost" size="icon" aria-label="Back to player list" onClick={() => router.replace("/dashboard/profiles")}><ArrowLeft aria-hidden="true" /></Button></div></CardHeader></Card>
           <ProfileEditor profile={profile} onSaved={() => { void mutateProfile(); void mutateList() }} />
-          <PlayerGrantPanel userId={selectedUserId} displayName={profile.user.displayName} onGranted={() => { void mutateProfile(); void mutateList() }} />
+          <PlayerGrantPanel userId={selectedUserId} displayName={profile.user.displayName} quickActions currentIsland={typeof profile.data.Island === "string" ? profile.data.Island : null} onGranted={() => { void mutateProfile(); void mutateList() }} />
           <PendingGrantList grants={profile.pendingGrants} userId={selectedUserId} onChanged={() => { void mutateProfile(); void mutateList() }} />
+          <ProfileActivityHistory userId={selectedUserId} />
         </>}</div>
       </div>
     </div>

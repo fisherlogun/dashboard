@@ -19,9 +19,11 @@ interface PlayerGrantPanelProps {
   userId: string
   displayName: string
   onGranted?: () => void
+  quickActions?: boolean
+  currentIsland?: string | null
 }
 
-export function PlayerGrantPanel({ userId, displayName, onGranted }: PlayerGrantPanelProps) {
+export function PlayerGrantPanel({ userId, displayName, onGranted, quickActions = false, currentIsland }: PlayerGrantPanelProps) {
   const { activeProject } = useSession()
   const [type, setType] = useState<GrantType>("cash")
   const [amount, setAmount] = useState("1000")
@@ -40,22 +42,14 @@ export function PlayerGrantPanel({ userId, displayName, onGranted }: PlayerGrant
   const allFinds = Object.entries(FINDS_BY_ISLAND)
   const allGear = Object.entries(GEAR_BY_SLOT)
 
-  async function submit() {
-    if (!activeProject) return
-    if ((type === "set_cash" || type === "level" || (type === "cash" && Number(amount) < -1000)) && !window.confirm(`Confirm ${type === "cash" ? "large cash removal" : type === "level" ? "level change" : "exact cash reset"} for ${displayName}?`)) return
+  async function queueGrant(grant: Record<string, unknown>) {
+    if (!activeProject || sending) return
     setSending(true)
-    const grant: Record<string, unknown> = { type, note: note.trim() }
-    if (["cash", "set_cash", "xp"].includes(type)) grant.amount = Number(amount)
-    if (type === "level") grant.level = Number(level)
-    if (type === "island") grant.island = island
-    if (type === "brew") { grant.brew = brew; grant.minutes = Number(minutes) }
-    if (type === "gear") { grant.item = gearItem; grant.equip = equip }
-    if (type === "find") { grant.item = findItem; grant.count = Number(count); grant.variant = variant }
     try {
       const response = await fetch("/api/player-profiles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: activeProject.id, action: "grant", userId, requestId: crypto.randomUUID(), grant }),
+        body: JSON.stringify({ projectId: activeProject.id, action: "grant", userId, requestId: crypto.randomUUID(), grant: { ...grant, note: note.trim() } }),
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || "Grant could not be saved")
@@ -68,6 +62,21 @@ export function PlayerGrantPanel({ userId, displayName, onGranted }: PlayerGrant
       setSending(false)
     }
   }
+
+  async function submit() {
+    if ((type === "set_cash" || type === "level" || (type === "cash" && Number(amount) < -1000)) && !window.confirm(`Confirm ${type === "cash" ? "large cash removal" : type === "level" ? "level change" : "exact cash reset"} for ${displayName}?`)) return
+    const grant: Record<string, unknown> = { type, note: note.trim() }
+    if (["cash", "set_cash", "xp"].includes(type)) grant.amount = Number(amount)
+    if (type === "level") grant.level = Number(level)
+    if (type === "island") grant.island = island
+    if (type === "brew") { grant.brew = brew; grant.minutes = Number(minutes) }
+    if (type === "gear") { grant.item = gearItem; grant.equip = equip }
+    if (type === "find") { grant.item = findItem; grant.count = Number(count); grant.variant = variant }
+    await queueGrant(grant)
+  }
+
+  const islandIndex = ISLANDS.findIndex((item) => item.id === currentIsland)
+  const nextIsland = ISLANDS[islandIndex + 1]
 
   return (
     <Card className="border-border/70 bg-card/80">
@@ -83,6 +92,7 @@ export function PlayerGrantPanel({ userId, displayName, onGranted }: PlayerGrant
           {type === "find" && <><Field><FieldLabel htmlFor={`grant-find-${userId}`}>Find</FieldLabel><Select value={findItem} onValueChange={setFindItem}><SelectTrigger id={`grant-find-${userId}`}><SelectValue /></SelectTrigger><SelectContent>{allFinds.map(([islandId, finds]) => <SelectGroup key={islandId}><SelectLabel>{islandId}</SelectLabel>{finds.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectGroup>)}</SelectContent></Select></Field><div className="grid gap-3 sm:grid-cols-2"><Field><FieldLabel htmlFor={`grant-find-count-${userId}`}>Count (1–1,000)</FieldLabel><Input id={`grant-find-count-${userId}`} type="number" min="1" max="1000" value={count} onChange={(event) => setCount(event.target.value)} /></Field><Field><FieldLabel htmlFor={`grant-variant-${userId}`}>Variant</FieldLabel><Select value={variant || "normal"} onValueChange={(value) => setVariant(value === "normal" ? "" : value)}><SelectTrigger id={`grant-variant-${userId}`}><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="normal">Normal</SelectItem>{VARIANTS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectGroup></SelectContent></Select></Field></div></>}
           <Field><FieldLabel htmlFor={`grant-note-${userId}`}>Audit note (optional)</FieldLabel><Input id={`grant-note-${userId}`} value={note} onChange={(event) => setNote(event.target.value)} maxLength={180} placeholder="Refund, support fix, event reward…" /></Field>
         </FieldGroup>
+        {quickActions && <div className="flex flex-col gap-2 border-t border-border/60 pt-4"><p className="text-xs font-medium text-muted-foreground">Quick actions</p><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" onClick={() => void queueGrant({ type: "cash", amount: 1000 })} disabled={sending || !activeProject}>+$1,000</Button><Button type="button" variant="outline" size="sm" onClick={() => void queueGrant({ type: "cash", amount: 10000 })} disabled={sending || !activeProject}>+$10,000</Button><Button type="button" variant="outline" size="sm" onClick={() => void queueGrant({ type: "brew", brew: "luck", minutes: 30 })} disabled={sending || !activeProject}>30 min Luck brew</Button>{nextIsland && <Button type="button" variant="outline" size="sm" onClick={() => void queueGrant({ type: "island", island: nextIsland.id })} disabled={sending || !activeProject}>Unlock {nextIsland.name}</Button>}</div></div>}
         <Button type="button" onClick={() => void submit()} disabled={sending || !activeProject}>{sending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Gift data-icon="inline-start" />}Queue player change</Button>
       </CardContent>
     </Card>
