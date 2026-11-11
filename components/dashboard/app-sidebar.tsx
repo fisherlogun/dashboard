@@ -6,14 +6,17 @@ import { useTheme } from "next-themes"
 import {
   Activity,
   Ban,
+  CalendarClock,
   Database,
   LayoutDashboard,
   LogOut,
   Moon,
   Server,
   Settings2,
+  Sparkles,
   Sun,
   TerminalSquare,
+  UserRound,
   Users,
   Waves,
 } from "lucide-react"
@@ -33,8 +36,11 @@ import {
 
 const navigation = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/dashboard/events", label: "Events", icon: Sparkles },
+  { href: "/dashboard/schedules", label: "Schedule", icon: CalendarClock },
   { href: "/dashboard/servers", label: "Live servers", icon: Server },
   { href: "/dashboard/players", label: "Players", icon: Users },
+  { href: "/dashboard/profiles", label: "Player profiles", icon: UserRound },
   { href: "/dashboard/commands", label: "Commands", icon: TerminalSquare },
   { href: "/dashboard/datastores", label: "Data stores", icon: Database },
   { href: "/dashboard/bans", label: "Moderation", icon: Ban },

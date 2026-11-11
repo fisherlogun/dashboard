@@ -1,7 +1,9 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useSession } from "@/components/session-provider"
+import { PlayerGrantDialog } from "@/components/dashboard/player-grant-panel"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,7 +16,7 @@ import {
 import { DateTimePicker } from "@/components/date-time-picker"
 import {
   Users, Search, Shield, MessageSquare, XCircle, RefreshCw,
-  AlertTriangle, Loader2, Clock, User2,
+  AlertTriangle, Loader2, Clock, User2, Gift, UserRound,
 } from "lucide-react"
 import { toast } from "sonner"
 import useSWR from "swr"
@@ -29,6 +31,9 @@ interface Player {
   play_time: number
   account_age: number
   avatar_url: string
+  level: number | null
+  cash: number | null
+  island: string | null
 }
 
 export default function PlayersPage() {
@@ -48,6 +53,7 @@ export default function PlayersPage() {
   const [banDuration, setBanDuration] = useState("1d")
   const [banCustomDate, setBanCustomDate] = useState<Date | undefined>()
   const [acting, setActing] = useState(false)
+  const [grantTarget, setGrantTarget] = useState<Player | null>(null)
 
   const players: Player[] = data?.players ?? []
   const filtered = players.filter(p =>
@@ -176,55 +182,51 @@ export default function PlayersPage() {
       ) : (
         <div className="border border-border bg-card divide-y divide-border">
           {/* Table header */}
-          <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-muted/50">
-            <span className="col-span-4 font-mono text-[9px] uppercase tracking-widest text-muted-foreground">Player</span>
-            <span className="col-span-2 font-mono text-[9px] uppercase tracking-widest text-muted-foreground">Server</span>
-            <span className="col-span-2 font-mono text-[9px] uppercase tracking-widest text-muted-foreground">Play Time</span>
-            <span className="col-span-1 font-mono text-[9px] uppercase tracking-widest text-muted-foreground">Age</span>
-            <span className="col-span-3 font-mono text-[9px] uppercase tracking-widest text-muted-foreground text-right">Actions</span>
+          <div className="grid grid-cols-12 gap-2 bg-muted/50 px-4 py-2">
+            <span className="col-span-10 font-mono text-[9px] uppercase tracking-widest text-muted-foreground md:col-span-4">Player</span>
+            <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Level</span>
+            <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Cash</span>
+            <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground xl:block xl:col-span-1">Island</span>
+            <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground md:block md:col-span-1">Server</span>
+            <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground md:block md:col-span-1">Time</span>
+            <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Age</span>
+            <span className="col-span-2 text-right font-mono text-[9px] uppercase tracking-widest text-muted-foreground">Actions</span>
           </div>
           {filtered.map(player => (
-            <div key={player.user_id} className="grid grid-cols-12 gap-2 items-center px-4 py-2.5 hover:bg-accent/30 transition-colors">
-              <div className="col-span-4 flex items-center gap-3 min-w-0">
-                <img
-                  src={player.avatar_url}
-                  alt=""
-                  className="h-7 w-7 border border-border shrink-0"
-                  crossOrigin="anonymous"
-                />
+            <div key={player.user_id} className="grid grid-cols-12 items-center gap-2 px-4 py-2.5 transition-colors hover:bg-accent/30">
+              <div className="col-span-10 flex min-w-0 items-center gap-3 md:col-span-4">
+                <img src={player.avatar_url} alt="" className="size-7 shrink-0 border border-border" crossOrigin="anonymous" />
                 <div className="min-w-0">
-                  <span className="font-mono text-xs text-foreground truncate block">{player.display_name}</span>
-                  <span className="font-mono text-[10px] text-muted-foreground truncate block">@{player.username} / {player.user_id}</span>
+                  <Link href={`/dashboard/profiles?userId=${encodeURIComponent(player.user_id)}`} className="block truncate font-mono text-xs text-foreground hover:text-primary">{player.display_name}</Link>
+                  <span className="block truncate font-mono text-[10px] text-muted-foreground">@{player.username} / {player.user_id}</span>
                 </div>
               </div>
-              <div className="col-span-2">
-                <span className="font-mono text-[10px] text-muted-foreground truncate block">{player.server_id.slice(0, 8)}...</span>
-              </div>
-              <div className="col-span-2 flex items-center gap-1">
-                <Clock className="h-3 w-3 text-muted-foreground" />
-                <span className="font-mono text-[10px] text-foreground">{formatPlayTime(player.play_time)}</span>
-              </div>
-              <div className="col-span-1">
-                <span className="font-mono text-[10px] text-muted-foreground">{player.account_age}d</span>
-              </div>
-              <div className="col-span-3 flex items-center justify-end gap-1">
-                <button onClick={() => openAction(player, "message")} className="p-1 text-muted-foreground hover:text-primary transition-colors" title="Message">
-                  <MessageSquare className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={() => openAction(player, "warn")} className="p-1 text-muted-foreground hover:text-warning transition-colors" title="Warn">
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={() => openAction(player, "kick")} className="p-1 text-muted-foreground hover:text-destructive transition-colors" title="Kick">
-                  <XCircle className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={() => openAction(player, "ban")} className="p-1 text-muted-foreground hover:text-destructive transition-colors" title="Ban">
-                  <Shield className="h-3.5 w-3.5" />
-                </button>
+              <div className="hidden font-mono text-[10px] text-foreground lg:block lg:col-span-1">{player.level ?? "—"}</div>
+              <div className="hidden font-mono text-[10px] text-foreground lg:block lg:col-span-1">{player.cash === null ? "—" : `$${player.cash.toLocaleString()}`}</div>
+              <div className="hidden truncate font-mono text-[10px] text-foreground xl:block xl:col-span-1">{player.island || "—"}</div>
+              <div className="hidden font-mono text-[10px] text-muted-foreground md:block md:col-span-1">{player.server_id.slice(0, 7)}…</div>
+              <div className="hidden items-center gap-1 md:flex md:col-span-1"><Clock aria-hidden="true" className="size-3 text-muted-foreground" /><span className="font-mono text-[10px] text-foreground">{formatPlayTime(player.play_time)}</span></div>
+              <div className="hidden font-mono text-[10px] text-muted-foreground lg:block lg:col-span-1">{player.account_age}d</div>
+              <div className="col-span-2 flex items-center justify-end gap-1">
+                <Link href={`/dashboard/profiles?userId=${encodeURIComponent(player.user_id)}`} aria-label={`Open ${player.display_name} profile`} title="Open profile" className="rounded p-1 text-muted-foreground transition-colors hover:text-primary"><UserRound aria-hidden="true" className="size-3.5" /></Link>
+                <button type="button" onClick={() => setGrantTarget(player)} className="rounded p-1 text-muted-foreground transition-colors hover:text-primary" aria-label={`Give or change ${player.display_name} data`} title="Give / change"><Gift aria-hidden="true" className="size-3.5" /></button>
+                <button type="button" onClick={() => openAction(player, "message")} className="rounded p-1 text-muted-foreground transition-colors hover:text-primary" aria-label={`Message ${player.display_name}`} title="Message"><MessageSquare aria-hidden="true" className="size-3.5" /></button>
+                <button type="button" onClick={() => openAction(player, "warn")} className="rounded p-1 text-muted-foreground transition-colors hover:text-warning" aria-label={`Warn ${player.display_name}`} title="Warn"><AlertTriangle aria-hidden="true" className="size-3.5" /></button>
+                <button type="button" onClick={() => openAction(player, "kick")} className="rounded p-1 text-muted-foreground transition-colors hover:text-destructive" aria-label={`Kick ${player.display_name}`} title="Kick"><XCircle aria-hidden="true" className="size-3.5" /></button>
+                <button type="button" onClick={() => openAction(player, "ban")} className="rounded p-1 text-muted-foreground transition-colors hover:text-destructive" aria-label={`Ban ${player.display_name}`} title="Ban"><Shield aria-hidden="true" className="size-3.5" /></button>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      <PlayerGrantDialog
+        open={!!grantTarget}
+        userId={grantTarget?.user_id ?? ""}
+        displayName={grantTarget?.display_name ?? "Player"}
+        onOpenChange={(open) => { if (!open) setGrantTarget(null) }}
+        onGranted={() => { void mutate(); setGrantTarget(null) }}
+      />
 
       {/* Action Dialog */}
       <AlertDialog open={!!actionTarget && !!actionType} onOpenChange={open => { if (!open) { setActionTarget(null); setActionType(null) } }}>

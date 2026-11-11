@@ -37,6 +37,7 @@ export default function DatastoresPage() {
   const [scope, setScope] = useState("global")
   const [key, setKey] = useState("")
   const [entryData, setEntryData] = useState("")
+  const [entryVersion, setEntryVersion] = useState<string | null>(null)
   const [loadingEntry, setLoadingEntry] = useState(false)
   const [saving, setSaving] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
@@ -89,6 +90,7 @@ export default function DatastoresPage() {
       const json = await res.json()
       if (res.ok) {
         setEntryData(JSON.stringify(json.data, null, 2))
+        setEntryVersion(json.version ?? null)
         setHasLoaded(true)
       } else {
         toast.error(json.error || "Failed to fetch entry")
@@ -102,7 +104,8 @@ export default function DatastoresPage() {
   }, [selectedStore, scope, key, pid])
 
   const saveEntry = async () => {
-    if (!selectedStore || !key || !pid) return
+    if (!selectedStore || !key || !pid || !hasLoaded) return
+    if (!window.confirm(`Save ${selectedStore}/${key}? This writes to the live Roblox DataStore.`)) return
     setSaving(true)
     try {
       let parsedData: unknown
@@ -111,10 +114,11 @@ export default function DatastoresPage() {
       const res = await fetch("/api/datastores", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: pid, name: selectedStore, scope, key, data: parsedData }),
+        body: JSON.stringify({ projectId: pid, name: selectedStore, scope, key, data: parsedData, expectedVersion: entryVersion }),
       })
-      if (res.ok) toast.success("Entry saved")
-      else toast.error((await res.json()).error || "Save failed")
+      const result = await res.json()
+      if (res.ok) { setEntryVersion(result.version ?? entryVersion); toast.success("Entry saved") }
+      else toast.error(result.error || "Save failed")
     } catch {
       toast.error("Network error")
     } finally {
@@ -152,7 +156,7 @@ export default function DatastoresPage() {
               {datastores.map((ds) => (
                 <button
                   key={ds.name}
-                  onClick={() => { setSelectedStore(ds.name); setEntryData(""); setHasLoaded(false); setKey("") }}
+                  onClick={() => { setSelectedStore(ds.name); setEntryData(""); setHasLoaded(false); setEntryVersion(null); setKey("") }}
                   className={`flex w-full items-center justify-between px-2 py-1.5 text-left text-xs font-mono transition-colors ${
                     selectedStore === ds.name ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted/30"
                   }`}
@@ -175,12 +179,12 @@ export default function DatastoresPage() {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Scope</Label>
-              <Input value={scope} onChange={(e) => setScope(e.target.value)} placeholder="global" className="font-mono text-xs h-8" disabled={!selectedStore} />
+              <Input value={scope} onChange={(e) => { setScope(e.target.value); setHasLoaded(false); setEntryVersion(null) }} placeholder="global" className="font-mono text-xs h-8" disabled={!selectedStore} />
             </div>
             <div className="space-y-1">
               <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Key</Label>
               {keysLoaded && keys.length > 0 ? (
-                <Select value={key} onValueChange={(v) => setKey(v === "__custom__" ? "" : v)} disabled={!selectedStore}>
+                <Select value={key} onValueChange={(v) => { setKey(v === "__custom__" ? "" : v); setHasLoaded(false); setEntryVersion(null) }} disabled={!selectedStore}>
                   <SelectTrigger className="font-mono text-xs h-8"><SelectValue placeholder="Select key..." /></SelectTrigger>
                   <SelectContent>
                     {keys.map((k) => <SelectItem key={k} value={k}><span className="font-mono text-xs">{k}</span></SelectItem>)}
@@ -188,7 +192,7 @@ export default function DatastoresPage() {
                   </SelectContent>
                 </Select>
               ) : (
-                <Input value={key} onChange={(e) => setKey(e.target.value)} placeholder="Player_123456" className="font-mono text-xs h-8" disabled={!selectedStore} />
+                <Input value={key} onChange={(e) => { setKey(e.target.value); setHasLoaded(false); setEntryVersion(null) }} placeholder="Player_123456" className="font-mono text-xs h-8" disabled={!selectedStore} />
               )}
             </div>
           </div>

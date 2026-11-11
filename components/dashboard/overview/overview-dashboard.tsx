@@ -6,10 +6,22 @@ import { useSession } from "@/components/session-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Activity, ArrowUpRight, Ban, Gauge, RefreshCw, Server, ShieldCheck, Signal, Users, Waves } from "lucide-react"
+import { Activity, ArrowUpRight, Ban, CalendarClock, Gauge, RefreshCw, Server, ShieldCheck, Signal, Sparkles, Users, Waves } from "lucide-react"
 import { MetricCard } from "@/components/dashboard/overview/metric-card"
 import { PlayerHistoryChart, type HistoryPoint } from "@/components/dashboard/overview/player-history-chart"
 import { RecentJoins, type JoinEvent } from "@/components/dashboard/overview/recent-joins"
+
+interface EventOverview {
+  settings?: { liveEvent?: { event: string; mult?: number; endsAt: number; message?: string } | null }
+  servers: Array<{ id: string; event?: string | null; event_name?: string | null; event_ends?: number | null; event_source?: string | null }>
+  nextScheduledEvent?: { label: string; event: string; nextStart: number; minutes: number } | null
+}
+
+async function fetchEventOverview(url: string): Promise<EventOverview> {
+  const response = await fetch(url, { cache: "no-store" })
+  if (!response.ok) throw new Error("Unable to load event overview")
+  return response.json()
+}
 
 interface DashboardStats {
   servers: number
@@ -52,6 +64,11 @@ export function OverviewDashboard() {
     activeProject ? `/api/stats?projectId=${encodeURIComponent(activeProject.id)}` : null,
     fetchStats,
     { refreshInterval: 10_000, revalidateOnFocus: true, keepPreviousData: true },
+  )
+  const { data: eventOverview } = useSWR<EventOverview>(
+    activeProject ? `/api/game-controls?action=overview&projectId=${encodeURIComponent(activeProject.id)}` : null,
+    fetchEventOverview,
+    { refreshInterval: 15_000, revalidateOnFocus: true },
   )
 
   async function shutDownAllServers() {
@@ -176,6 +193,17 @@ export function OverviewDashboard() {
           </Button>
         </div>
       )}
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <Card className="border-border/70 bg-card/80">
+          <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0"><div><CardTitle className="flex items-center gap-2 text-base"><Sparkles aria-hidden="true" className="size-4 text-primary" />Current game event</CardTitle><CardDescription>Event and source reported by each live server</CardDescription></div><Button asChild variant="outline" size="sm"><Link href="/dashboard/events">Manage</Link></Button></CardHeader>
+          <CardContent>{(eventOverview?.servers ?? []).some((server) => server.event) ? <div className="flex flex-col gap-2">{eventOverview?.servers.filter((server) => server.event).map((server) => <div key={server.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 px-3 py-2"><div className="min-w-0"><p className="truncate text-sm font-medium">{server.event_name || server.event}</p><p className="font-mono text-[10px] text-muted-foreground">{server.event_source || "unknown"} · {server.id.slice(0, 12)}</p></div><Badge variant="outline">{server.event_ends ? `${Math.max(0, Math.floor((server.event_ends - Date.now() / 1000) / 60))}m left` : "Active"}</Badge></div>)}</div> : <p className="text-sm text-muted-foreground">No event currently reported by live servers.</p>}</CardContent>
+        </Card>
+        <Card className="border-border/70 bg-card/80">
+          <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0"><div><CardTitle className="flex items-center gap-2 text-base"><CalendarClock aria-hidden="true" className="size-4 text-primary" />Next scheduled event</CardTitle><CardDescription>Calculated from the shared UTC schedule</CardDescription></div><Button asChild variant="outline" size="sm"><Link href="/dashboard/schedules">Schedule</Link></Button></CardHeader>
+          <CardContent>{eventOverview?.nextScheduledEvent ? <div className="rounded-md border border-border/60 px-3 py-3"><p className="font-medium">{eventOverview.nextScheduledEvent.label}</p><p className="mt-1 text-sm text-muted-foreground">{eventOverview.nextScheduledEvent.event} · {eventOverview.nextScheduledEvent.minutes} min</p><p className="mt-2 font-mono text-xs text-primary">{new Date(eventOverview.nextScheduledEvent.nextStart * 1000).toLocaleString()}</p></div> : <p className="text-sm text-muted-foreground">No enabled event is scheduled.</p>}</CardContent>
+        </Card>
+      </section>
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.9fr)]">
         <Card className="border-border/70 bg-card/80">

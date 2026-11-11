@@ -122,7 +122,7 @@ export default function PrivateSettingsPage() {
             </div>
             <ol className="grid gap-2 rounded-lg border border-border/70 bg-background/50 p-4 text-xs leading-relaxed text-muted-foreground sm:grid-cols-3">
               <li><span className="font-mono text-primary">01</span> Put the server file in <code>ServerScriptService</code>.</li>
-              <li><span className="font-mono text-primary">02</span> Put the client UI file in <code>StarterPlayerScripts</code>.</li>
+              <li><span className="font-mono text-primary">02</span> Scuba Simulator renders its own themed notice card; the optional client UI is for other experiences only.</li>
               <li><span className="font-mono text-primary">03</span> Enable HTTP requests and MessagingService for the experience.</li>
             </ol>
             <div className="flex flex-wrap gap-2">
@@ -154,7 +154,7 @@ export default function PrivateSettingsPage() {
                 <Download aria-hidden="true" className="size-4" /> Server Script
               </a>
               <a href="/NexusDashboardClient.lua" download className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium transition-colors hover:bg-muted">
-                <Download aria-hidden="true" className="size-4" /> Client UI Script
+                <Download aria-hidden="true" className="size-4" /> Optional client UI · other games
               </a>
             </div>
           </CardContent>
