@@ -1,12 +1,8 @@
-import { Suspense } from "react"
-import type { Metadata } from "next"
-import { PlayerProfileManager } from "@/components/dashboard/player-profile-manager"
+import { redirect } from "next/navigation"
 
-export const metadata: Metadata = {
-  title: "Player profiles | Scuba Ops",
-  description: "Search, review and safely manage online and offline Scuba Simulator player profiles.",
-}
-
-export default function ProfilesPage() {
-  return <Suspense fallback={<div className="h-64 rounded-xl border border-border/60 bg-muted/30" />}><PlayerProfileManager /></Suspense>
+export default async function ProfilesPage({ searchParams }: { searchParams: Promise<{ userId?: string }> }) {
+  const { userId } = await searchParams
+  const query = new URLSearchParams({ tab: "profiles" })
+  if (userId) query.set("userId", userId)
+  redirect(`/dashboard/players?${query.toString()}`)
 }

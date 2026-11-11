@@ -2,21 +2,14 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useTheme } from "next-themes"
 import {
   Activity,
-  Ban,
   CalendarClock,
-  Database,
   LayoutDashboard,
   LogOut,
-  Moon,
+  Megaphone,
   Server,
   Settings2,
-  Sparkles,
-  Sun,
-  TerminalSquare,
-  UserRound,
   Users,
   Waves,
 } from "lucide-react"
@@ -35,21 +28,16 @@ import {
 } from "@/components/ui/sidebar"
 
 const navigation = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { href: "/dashboard/events", label: "Events", icon: Sparkles },
-  { href: "/dashboard/schedules", label: "Schedule", icon: CalendarClock },
-  { href: "/dashboard/servers", label: "Live servers", icon: Server },
-  { href: "/dashboard/players", label: "Players", icon: Users },
-  { href: "/dashboard/profiles", label: "Player profiles", icon: UserRound },
-  { href: "/dashboard/commands", label: "Commands", icon: TerminalSquare },
-  { href: "/dashboard/datastores", label: "Data stores", icon: Database },
-  { href: "/dashboard/bans", label: "Moderation", icon: Ban },
-  { href: "/dashboard/logs", label: "Activity log", icon: Activity },
+  { href: "/dashboard", label: "Overview", key: "O", icon: LayoutDashboard },
+  { href: "/dashboard/events", label: "Events", key: "E", icon: CalendarClock },
+  { href: "/dashboard/servers", label: "Live servers", key: "S", icon: Server },
+  { href: "/dashboard/players", label: "Players", key: "P", icon: Users },
+  { href: "/dashboard/commands", label: "Announcements", key: "A", icon: Megaphone },
+  { href: "/dashboard/logs", label: "Activity log", key: "L", icon: Activity },
 ]
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const { theme, setTheme } = useTheme()
   const { activeProject, user, logout } = useSession()
 
   return (
@@ -70,14 +58,15 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel className="px-2 font-mono text-[9px] uppercase tracking-[0.18em]">Game</SidebarGroupLabel>
           <SidebarMenu>
-            {navigation.map(({ href, label, icon: Icon }) => {
+            {navigation.map(({ href, label, key, icon: Icon }) => {
               const isActive = pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`))
               return (
                 <SidebarMenuItem key={href}>
                   <SidebarMenuButton asChild isActive={isActive} tooltip={label}>
                     <Link href={href} aria-current={isActive ? "page" : undefined}>
                       <Icon aria-hidden="true" />
-                      <span>{label}</span>
+                      <span className="flex-1 uppercase">{label}</span>
+                      <kbd className="hidden border border-sidebar-border bg-background/70 px-1 text-[10px] text-muted-foreground group-data-[collapsible=icon]:hidden sm:inline-flex">{key}</kbd>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -121,15 +110,6 @@ export function AppSidebar() {
             <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">Single-owner access</p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-              aria-label={theme === "dark" ? "Switch to light appearance" : "Switch to dark appearance"}
-              title={theme === "dark" ? "Light appearance" : "Dark appearance"}
-            >
-              {theme === "dark" ? <Sun aria-hidden="true" className="size-4" /> : <Moon aria-hidden="true" className="size-4" />}
-            </button>
             <button
               type="button"
               onClick={() => void logout()}

@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Terminal, Loader2, Zap, Megaphone, AlertTriangle, ShieldBan, Send, CheckCircle2, XCircle, Clock } from "lucide-react"
 import { toast } from "sonner"
 import { DateTimePicker } from "@/components/date-time-picker"
+import { AnnouncementPreview } from "@/components/dashboard/announcement-preview"
 
 const announcementColors = { announcement: "#E2C27A", update: "#70C4BA", event: "#7FE08A", warning: "#CE5C50", maintenance: "#E8A05A" } as const
 const fetcher = async (url: string) => {
@@ -26,7 +27,7 @@ interface HistoryEntry { id: string; type: string; details: string; time: Date; 
 export default function CommandsPage() {
   const { activeProject, user } = useSession()
   const { data: serverData } = useSWR(activeProject ? `/api/servers?projectId=${encodeURIComponent(activeProject.id)}` : null, fetcher, { refreshInterval: 15000 })
-  const [type, setType] = useState<CmdType>("kick")
+  const [type, setType] = useState<CmdType>("announce")
   const [userId, setUserId] = useState("")
   const [reason, setReason] = useState("")
   const [privateReason, setPrivateReason] = useState("")
@@ -95,7 +96,7 @@ export default function CommandsPage() {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Terminal className="h-4 w-4 text-primary" />
-        <h1 className="text-sm font-mono font-bold text-foreground uppercase tracking-wider">Command Console</h1>
+        <h1 className="font-serif text-2xl font-bold text-foreground">Owner Announcements</h1>
       </div>
 
       <div className="flex gap-1.5 flex-wrap">
@@ -178,11 +179,7 @@ export default function CommandsPage() {
                   <SelectContent><SelectGroup><SelectItem value="all">All servers</SelectItem>{(serverData?.servers ?? []).map((server: { id: string }) => <SelectItem key={server.id} value={server.id}>{server.id.slice(0, 20)}</SelectItem>)}</SelectGroup></SelectContent>
                 </Select>
               </div>
-              <div className="rounded-lg border p-4" style={{ backgroundColor: "#17191E", borderColor: "#9E8660" }}>
-                <p className="font-serif text-xs font-semibold" style={{ color: announcementColors[announcementStyle] }}>{title.trim() || announcementStyle.toUpperCase()}</p>
-                <p className="mt-2 text-sm text-white">{message.trim() || "Your announcement preview appears here."}</p>
-                <p className="mt-2 font-mono text-[10px] text-white/60">FROM {user?.displayName || "OWNER"} · {announcementDuration}s</p>
-              </div>
+              <AnnouncementPreview type={announcementStyle} title={title} message={message} owner={user?.displayName || "OWNER"} duration={announcementDuration} />
             </>
           )}
           <Button className="gap-1.5 font-mono text-xs uppercase tracking-wider h-8" onClick={execute} disabled={sending}>
