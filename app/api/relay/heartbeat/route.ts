@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getProject, upsertLiveServer, upsertLivePlayer, addPlayerHistoryPoint, cleanupStaleServers, addActionLog } from "@/lib/db"
+import { verifyProjectRelayKey } from "@/lib/relay-auth"
 
 // This endpoint is called by the Roblox Lua script every 15 seconds.
 // It is authenticated by matching the project's API key (sent as x-api-key header).
@@ -17,10 +18,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "projectId and serverId required" }, { status: 400 })
     }
 
-    // Verify API key matches the project
     const project = await getProject(projectId)
-    if (!project || project.api_key !== apiKey) {
-      return NextResponse.json({ error: "Invalid API key for this project" }, { status: 403 })
+    if (!project || !verifyProjectRelayKey(projectId, apiKey)) {
+      return NextResponse.json({ error: "Invalid relay key for this project" }, { status: 403 })
+    }
+    if (String(placeId ?? project.place_id) !== String(project.place_id)) {
+      return NextResponse.json({ error: "Place does not match this project" }, { status: 403 })
     }
 
     // Upsert the server

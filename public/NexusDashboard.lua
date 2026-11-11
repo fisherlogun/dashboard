@@ -1,218 +1,297 @@
---[[
-    Nexus Dashboard - Server Integration Script
-    Place this in ServerScriptService
-    
-    This script handles:
-    1. Server heartbeat (sends live server + player data to your dashboard)
-    2. Command processing (kick, ban, warn, announce from the dashboard)
-    3. Ban checking on player join
-    
-    SETUP:
-    - Set DASHBOARD_URL to your deployed Vercel URL
-    - Set PROJECT_API_KEY to your project's API key (from dashboard settings)
-    - Set PROJECT_ID to your project's ID
-]]
+-- Scuba Simulator private operations relay
+-- Install as a Script in ServerScriptService. Paste the three private settings from
+-- Dashboard > Private settings. Never put the relay key in a LocalScript or ReplicatedStorage.
 
 local HttpService = game:GetService("HttpService")
-local MessagingService = game:GetService("MessagingService")
 local Players = game:GetService("Players")
+local MessagingService = game:GetService("MessagingService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
----------------------------------------------------------------------------
--- CONFIGURATION (EDIT THESE)
----------------------------------------------------------------------------
-local DASHBOARD_URL = "https://YOUR-APP.vercel.app"  -- Your dashboard URL (no trailing slash)
-local PROJECT_API_KEY = "YOUR_PROJECT_API_KEY"         -- From dashboard settings
-local PROJECT_ID = "YOUR_PROJECT_ID"                   -- From dashboard settings
-local HEARTBEAT_INTERVAL = 15                          -- Seconds between heartbeats
----------------------------------------------------------------------------
+-- Replace these values from Dashboard > Private settings > In-game relay.
+local DASHBOARD_URL = "https://YOUR-DEPLOYED-DASHBOARD"
+local PROJECT_ID = "a4197d57-741b-4cac-916b-5260bd511560"
+local PROJECT_RELAY_KEY = "PASTE_RELAY_KEY_FROM_PRIVATE_SETTINGS"
 
--- Create RemoteEvents for client-side UI
-local announceEvent = Instance.new("RemoteEvent")
-announceEvent.Name = "DashboardAnnouncement"
-announceEvent.Parent = game.ReplicatedStorage
+local EXPECTED_PLACE_ID = 139373122825390
+local HEARTBEAT_SECONDS = 15
+local COMMAND_TOPIC = "DashboardCommands"
+local BASE_URL = DASHBOARD_URL:gsub("/+$", "")
 
-local warnEvent = Instance.new("RemoteEvent")
-warnEvent.Name = "DashboardWarning"
-warnEvent.Parent = game.ReplicatedStorage
+if game.PlaceId ~= EXPECTED_PLACE_ID then
+  warn("[Scuba Ops] This script is configured for place " .. EXPECTED_PLACE_ID .. "; current place is " .. game.PlaceId)
+  return
+end
 
----------------------------------------------------------------------------
--- HEARTBEAT: Send live server + player data to the dashboard
----------------------------------------------------------------------------
-local function getPlayerData()
-    local playerList = {}
-    for _, player in Players:GetPlayers() do
-        local playTime = os.time() - (player:GetAttribute("JoinTime") or os.time())
-        table.insert(playerList, {
-            userId = tostring(player.UserId),
-            displayName = player.DisplayName,
-            username = player.Name,
-            playTime = playTime,
-            accountAge = player.AccountAge,
-            avatarUrl = Players:GetUserThumbnailAsync(
-                player.UserId,
-                Enum.ThumbnailType.HeadShot,
-                Enum.ThumbnailSize.Size100x100
-            ) or "",
-        })
+if DASHBOARD_URL:find("YOUR%-DEPLOYED%-DASHBOARD") or PROJECT_RELAY_KEY:find("PASTE_RELAY_KEY") then
+  warn("[Scuba Ops] Open Private settings in the owner dashboard and paste the generated server settings into this script.")
+  return
+end
+
+local serverId = game.JobId
+if serverId == "" then
+  warn("[Scuba Ops] Relay telemetry only runs in live game servers, not Studio sessions.")
+  return
+end
+
+local function getOrCreateRemote(name)
+  local existing = ReplicatedStorage:FindFirstChild(name)
+  if existing and existing:IsA("RemoteEvent") then
+    return existing
+  end
+
+  local remote = Instance.new("RemoteEvent")
+  remote.Name = name
+  remote.Parent = ReplicatedStorage
+  return remote
+end
+
+local announcementRemote = getOrCreateRemote("NexusDashboardAnnouncement")
+local warningRemote = getOrCreateRemote("NexusDashboardWarning")
+local joinedAt = {}
+local frameCount = 0
+local frameWindowStarted = os.clock()
+local measuredFps = 60
+
+RunService.Heartbeat:Connect(function()
+  frameCount += 1
+  local now = os.clock()
+  local elapsed = now - frameWindowStarted
+  if elapsed >= 2 then
+    measuredFps = frameCount / elapsed
+    frameCount = 0
+    frameWindowStarted = now
+  end
+end)
+
+local function requestJson(method, path, payload)
+  local options = {
+    Url = BASE_URL .. path,
+    Method = method,
+    Headers = {
+      ["x-api-key"] = PROJECT_RELAY_KEY,
+      ["Content-Type"] = "application/json",
+    },
+  }
+
+  if payload then
+    options.Body = HttpService:JSONEncode(payload)
+  end
+
+  local ok, response = pcall(function()
+    return HttpService:RequestAsync(options)
+  end)
+
+  if not ok then
+    return nil, tostring(response)
+  end
+  if not response.Success then
+    return nil, "HTTP " .. tostring(response.StatusCode)
+  end
+  return response, nil
+end
+
+local function postWithRetry(path, payload)
+  for attempt = 1, 3 do
+    local response, err = requestJson("POST", path, payload)
+    if response then
+      return true
     end
-    return playerList
+    if attempt < 3 then
+      task.wait(attempt)
+    else
+      warn("[Scuba Ops] Relay request failed at " .. path .. ": " .. tostring(err))
+    end
+  end
+  return false
+end
+
+local function getPlayerSnapshot()
+  local playerList = {}
+  local pingTotal = 0
+  local pingCount = 0
+  local now = os.time()
+
+  for _, player in ipairs(Players:GetPlayers()) do
+    local pingOk, pingSeconds = pcall(function()
+      return player:GetNetworkPing()
+    end)
+    if pingOk and type(pingSeconds) == "number" then
+      pingTotal += pingSeconds * 1000
+      pingCount += 1
+    end
+
+    playerList[#playerList + 1] = {
+      userId = player.UserId,
+      username = player.Name,
+      displayName = player.DisplayName,
+      accountAge = player.AccountAge,
+      playTime = math.max(0, now - (joinedAt[player.UserId] or now)),
+    }
+  end
+
+  local averagePing = pingCount > 0 and math.floor(pingTotal / pingCount + 0.5) or 0
+  return playerList, averagePing
 end
 
 local function sendHeartbeat()
-    local success, err = pcall(function()
-        local serverData = {
-            serverId = game.JobId,
-            projectId = PROJECT_ID,
-            placeId = tostring(game.PlaceId),
-            players = #Players:GetPlayers(),
-            maxPlayers = Players.MaxPlayers,
-            fps = math.floor(1 / game:GetService("RunService").Heartbeat:Wait()),
-            ping = 0,
-            uptime = math.floor(workspace.DistributedGameTime),
-            playerList = getPlayerData(),
-        }
-
-        HttpService:RequestAsync({
-            Url = DASHBOARD_URL .. "/api/heartbeat",
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json",
-                ["x-api-key"] = PROJECT_API_KEY,
-            },
-            Body = HttpService:JSONEncode(serverData),
-        })
-    end)
-
-    if not success then
-        warn("[Nexus] Heartbeat failed:", err)
-    end
+  local playerList, averagePing = getPlayerSnapshot()
+  local ok = postWithRetry("/api/relay/heartbeat", {
+    projectId = PROJECT_ID,
+    serverId = serverId,
+    placeId = game.PlaceId,
+    players = #playerList,
+    maxPlayers = Players.MaxPlayers,
+    fps = math.floor(measuredFps + 0.5),
+    ping = averagePing,
+    uptime = math.floor(workspace.DistributedGameTime),
+    playerList = playerList,
+  })
+  return ok
 end
 
--- Track join time for play time calculation
-Players.PlayerAdded:Connect(function(player)
-    player:SetAttribute("JoinTime", os.time())
-end)
-
--- Heartbeat loop
-task.spawn(function()
-    while true do
-        sendHeartbeat()
-        task.wait(HEARTBEAT_INTERVAL)
-    end
-end)
-
----------------------------------------------------------------------------
--- COMMANDS: Process commands from the dashboard via MessagingService
----------------------------------------------------------------------------
-local function processCommand(data)
-    if data.type == "kick" then
-        local player = Players:GetPlayerByUserId(tonumber(data.userId))
-        if player then
-            player:Kick("Removed by admin: " .. (data.reason or "No reason provided"))
-            print("[Nexus] Kicked", player.Name, ":", data.reason)
-        end
-
-    elseif data.type == "ban" then
-        -- Kick the player immediately
-        local player = Players:GetPlayerByUserId(tonumber(data.userId))
-        if player then
-            local banMsg = "You have been banned"
-            if data.reason then
-                banMsg = banMsg .. ": " .. data.reason
-            end
-            if data.expiresAt then
-                -- Format expiry date properly
-                local expiryDate = data.expiresAt
-                banMsg = banMsg .. "\nExpires: " .. expiryDate
-            elseif data.duration and data.duration ~= "permanent" and data.duration ~= "custom" then
-                banMsg = banMsg .. " (Duration: " .. data.duration .. ")"
-            elseif data.duration == "permanent" then
-                banMsg = banMsg .. " (Permanent)"
-            end
-            player:Kick(banMsg)
-            print("[Nexus] Banned", player.Name, ":", data.reason, "Duration:", data.duration)
-        end
-
-    elseif data.type == "unban" then
-        -- Unban is handled server-side in the dashboard DB
-        -- This message is informational only
-        print("[Nexus] Unban processed for userId:", data.userId)
-
-    elseif data.type == "warn" then
-        local player = Players:GetPlayerByUserId(tonumber(data.userId))
-        if player then
-            warnEvent:FireClient(player, data.reason or "No reason", data.issuedBy or "Admin")
-            print("[Nexus] Warned", player.Name, ":", data.reason)
-        end
-
-    elseif data.type == "announce" then
-        -- If serverId specified, only broadcast to that server
-        if data.serverId and data.serverId ~= "" then
-            if game.JobId == data.serverId then
-                announceEvent:FireAllClients(data.message, data.issuedBy or "Admin")
-                print("[Nexus] Server announcement:", data.message)
-            end
-        else
-            announceEvent:FireAllClients(data.message, data.issuedBy or "Admin")
-            print("[Nexus] Global announcement:", data.message)
-        end
-
-    elseif data.type == "shutdown_server" then
-        if game.JobId == data.serverId then
-            print("[Nexus] Server shutdown requested by", data.issuedBy)
-            for _, player in Players:GetPlayers() do
-                player:Kick("Server shutdown by admin: " .. (data.reason or "Maintenance"))
-            end
-        end
-    end
-end
-
-MessagingService:SubscribeAsync("DashboardCommands", function(message)
-    local success, data = pcall(function()
-        return HttpService:JSONDecode(message.Data)
+local function checkBan(player)
+  local url = string.format("%s/api/check-ban?projectId=%s&userId=%s", BASE_URL, PROJECT_ID, player.UserId)
+  for attempt = 1, 3 do
+    local ok, response = pcall(function()
+      return HttpService:RequestAsync({
+        Url = url,
+        Method = "GET",
+        Headers = { ["x-api-key"] = PROJECT_RELAY_KEY },
+      })
     end)
 
-    if not success then
-        warn("[Nexus] Failed to decode command:", message.Data)
-        return
-    end
-
-    processCommand(data)
-end)
-
----------------------------------------------------------------------------
--- BAN CHECK: Check if a player is banned when they joinz
----------------------------------------------------------------------------
-Players.PlayerAdded:Connect(function(player)
-    local success, result = pcall(function()
-        local response = HttpService:RequestAsync({
-            Url = DASHBOARD_URL .. "/api/check-ban?projectId=" .. PROJECT_ID .. "&userId=" .. tostring(player.UserId),
-            Method = "GET",
-            Headers = {
-                ["x-api-key"] = PROJECT_API_KEY,
-            },
-        })
+    if ok and response.Success then
+      local decodedOk, result = pcall(function()
         return HttpService:JSONDecode(response.Body)
-    end)
-
-    if success and result then
-        if result.banned then
-            local kickMsg = "You are banned from this game"
-            if result.reason then
-                kickMsg = kickMsg .. ": " .. result.reason
-            end
-            if result.expiresAt then
-                kickMsg = kickMsg .. "\nExpires: " .. result.expiresAt
-            end
-            player:Kick(kickMsg)
-            print("[Nexus] Banned player blocked:", player.Name)
-        elseif result.wasUnbanned then
-            print("[Nexus] unbanned -", player.Name, "(" .. player.UserId .. ")")
-        end
+      end)
+      if decodedOk and result.banned and player.Parent == Players then
+        local ban = result.ban or result
+        local reason = ban.reason or "Access to this experience is restricted."
+        player:Kick("You are banned from this experience. Reason: " .. tostring(reason))
+      end
+      return
     end
+
+    if ok and response.StatusCode >= 400 and response.StatusCode < 500 then
+      warn("[Scuba Ops] Ban check rejected for user " .. player.UserId .. " (HTTP " .. response.StatusCode .. ")")
+      return
+    end
+    if attempt < 3 then
+      task.wait(attempt)
+    end
+  end
+  warn("[Scuba Ops] Ban check unavailable for user " .. player.UserId .. "; allowing join while the dashboard is unreachable.")
+end
+
+local function trackPlayer(player)
+  if joinedAt[player.UserId] then
+    return
+  end
+  joinedAt[player.UserId] = os.time()
+
+  task.spawn(function()
+    postWithRetry("/api/relay/join", {
+      projectId = PROJECT_ID,
+      serverId = serverId,
+      placeId = game.PlaceId,
+      userId = player.UserId,
+      username = player.Name,
+      displayName = player.DisplayName,
+      accountAge = player.AccountAge,
+    })
+  end)
+  task.spawn(checkBan, player)
+  task.delay(0.25, sendHeartbeat)
+end
+
+Players.PlayerAdded:Connect(trackPlayer)
+Players.PlayerRemoving:Connect(function(player)
+  task.spawn(function()
+    postWithRetry("/api/relay/leave", {
+      projectId = PROJECT_ID,
+      serverId = serverId,
+      userId = player.UserId,
+    })
+    joinedAt[player.UserId] = nil
+    task.wait(0.25)
+    sendHeartbeat()
+  end)
 end)
 
----------------------------------------------------------------------------
-print("[Nexus] Dashboard integration initialized")
-print("[Nexus] Server ID:", game.JobId)
-print("[Nexus] Heartbeat interval:", HEARTBEAT_INTERVAL, "seconds")
+local function findPlayer(userId)
+  local target = tonumber(userId)
+  if not target then
+    return nil
+  end
+  for _, player in ipairs(Players:GetPlayers()) do
+    if player.UserId == target then
+      return player
+    end
+  end
+  return nil
+end
+
+local function handleCommand(raw)
+  local ok, command = pcall(function()
+    if type(raw) == "string" then
+      return HttpService:JSONDecode(raw)
+    end
+    return raw
+  end)
+  if not ok or type(command) ~= "table" then
+    warn("[Scuba Ops] Ignored an invalid dashboard command.")
+    return
+  end
+
+  local commandType = tostring(command.type or "")
+  local message = tostring(command.message or "")
+  local issuedBy = tostring(command.issuedBy or "Owner")
+  local targetUserId = command.userId or command.targetUserId or command.playerId
+
+  if commandType == "announce" then
+    announcementRemote:FireAllClients(message, issuedBy)
+  elseif commandType == "warn" then
+    if targetUserId then
+      local target = findPlayer(targetUserId)
+      if target then warningRemote:FireClient(target, message, issuedBy) end
+    else
+      for _, player in ipairs(Players:GetPlayers()) do
+        warningRemote:FireClient(player, message, issuedBy)
+      end
+    end
+  elseif commandType == "kick" or commandType == "ban" then
+    local target = findPlayer(targetUserId)
+    if target then
+      target:Kick(message ~= "" and message or "Removed by the game owner.")
+    end
+  elseif commandType == "shutdown_server" or commandType == "shutdown_all" then
+    if commandType == "shutdown_all" or command.serverId == serverId then
+      local reason = message ~= "" and message or "The game owner is restarting servers. Please rejoin shortly."
+      for _, player in ipairs(Players:GetPlayers()) do
+        player:Kick(reason)
+      end
+    end
+  end
+end
+
+local subscribeOk, subscribeResult = pcall(function()
+  return MessagingService:SubscribeAsync(COMMAND_TOPIC, function(message)
+    handleCommand(message.Data)
+  end)
+end)
+if not subscribeOk then
+  warn("[Scuba Ops] Could not subscribe to dashboard commands: " .. tostring(subscribeResult))
+end
+
+for _, player in ipairs(Players:GetPlayers()) do
+  trackPlayer(player)
+end
+
+task.spawn(function()
+  task.wait(2)
+  sendHeartbeat()
+  while task.wait(HEARTBEAT_SECONDS) do
+    sendHeartbeat()
+  end
+end)

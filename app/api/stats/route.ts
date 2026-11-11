@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { getLiveServers, getLivePlayers, getPlayerHistory, getBans, getActionLogs, getProject, addPlayerHistoryPoint, cleanupOldPlayerHistory } from "@/lib/db"
+import { getLiveServers, getLivePlayers, getPlayerHistory, getBans, getActionLogs, getLatestServerHeartbeat, getProject, addPlayerHistoryPoint, cleanupOldPlayerHistory } from "@/lib/db"
 import { getGameStats, getGameVotes, getFavoriteCount } from "@/lib/roblox"
 
 export async function GET(req: NextRequest) {
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     const project = await getProject(projectId)
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
 
-    const [servers, players, history, bans, recentLogs, gameStats, votes, favCount] = await Promise.all([
+    const [servers, players, history, bans, recentLogs, gameStats, votes, favCount, latestHeartbeat] = await Promise.all([
       getLiveServers(projectId).catch(() => []),
       getLivePlayers(projectId).catch(() => []),
       getPlayerHistory(projectId, 180).catch(() => []),
@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
       getGameStats(project.universe_id).catch(() => null),
       getGameVotes(project.universe_id).catch(() => null),
       getFavoriteCount(project.universe_id).catch(() => 0),
+      getLatestServerHeartbeat(projectId).catch(() => null),
     ])
 
     // Fetch game thumbnail from Roblox API
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
     const totalPlayers = servers.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.players as number) || 0), 0)
 
     // If no live servers/players but last history point had players > 0, record a zero
-    if (totalPlayers === 0 && history.length > 0 && (history[0] as Record<string, unknown>).player_count !== 0) {
+    if (totalPlayers === 0 && history.length > 0 && (history[history.length - 1] as Record<string, unknown>).player_count !== 0) {
       try { await addPlayerHistoryPoint(projectId, 0, 0) } catch { /* non-fatal */ }
     }
     const totalCapacity = servers.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.max_players as number) || 0), 0)
@@ -59,6 +60,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       servers: servers.length,
       players: totalPlayers,
+      lastHeartbeatAt: latestHeartbeat,
       totalCapacity,
       avgFps: Math.round(avgFps * 10) / 10,
       avgPing: Math.round(avgPing * 10) / 10,

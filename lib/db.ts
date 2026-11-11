@@ -263,6 +263,16 @@ export async function getLiveServers(projectId: string) {
   `
 }
 
+export async function getLatestServerHeartbeat(projectId: string): Promise<string | null> {
+  const q = sql()
+  const rows = await q`
+    SELECT MAX(last_heartbeat)::text AS last_heartbeat
+    FROM live_servers
+    WHERE project_id = ${projectId}
+  `
+  return rows[0]?.last_heartbeat ?? null
+}
+
 export async function cleanupStaleServers() {
   const q = sql()
   await q`DELETE FROM live_servers WHERE last_heartbeat < NOW() - INTERVAL '60 seconds'`
@@ -287,11 +297,19 @@ export async function upsertLivePlayer(data: {
     VALUES (${data.userId}, ${data.projectId}, ${data.serverId}, ${data.displayName}, ${data.username}, ${data.playTime}, ${data.accountAge}, ${data.avatarUrl}, NOW())
     ON CONFLICT (user_id, project_id) DO UPDATE SET
       server_id = ${data.serverId}, display_name = ${data.displayName}, username = ${data.username},
-      play_time = ${data.playTime}, account_age = ${data.accountAge}, avatar_url = ${data.avatarUrl},
-      last_heartbeat = NOW()
+      play_time = ${data.playTime}, account_age = ${data.accountAge},
+      avatar_url = COALESCE(${data.avatarUrl}, live_players.avatar_url), last_heartbeat = NOW()
     RETURNING (xmax = 0) AS is_new
   `
   return result?.[0]?.is_new === true
+}
+
+export async function removeLivePlayer(projectId: string, userId: string, serverId: string) {
+  const q = sql()
+  await q`
+    DELETE FROM live_players
+    WHERE project_id = ${projectId} AND user_id = ${userId} AND server_id = ${serverId}
+  `
 }
 
 export async function getLivePlayers(projectId: string) {

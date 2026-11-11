@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getProject, getBans } from "@/lib/db"
+import { verifyProjectRelayKey } from "@/lib/relay-auth"
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
     if (!projectId || !userId) return NextResponse.json({ error: "projectId and userId required" }, { status: 400 })
 
     const project = await getProject(projectId)
-    if (!project || project.api_key !== apiKey) return NextResponse.json({ error: "Invalid" }, { status: 403 })
+    if (!project || !verifyProjectRelayKey(projectId, apiKey)) return NextResponse.json({ error: "Invalid relay key" }, { status: 403 })
 
     const bans = await getBans(projectId)
     const activeBan = bans.find((b: { roblox_user_id: string; active: boolean; expires_at: string | null }) => {

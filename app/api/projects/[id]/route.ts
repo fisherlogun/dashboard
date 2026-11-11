@@ -14,13 +14,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const role = await getMemberRole(id, session.userId)
     if (!role && !isGlobalAdmin(session.userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    // Only owner sees api_key
-    const safe = { ...project }
-    if (role !== "owner" && !isGlobalAdmin(session.userId)) {
-      safe.api_key = "***"
-    }
+    const safeProject = Object.fromEntries(
+      Object.entries(project).filter(([key]) => key !== "api_key"),
+    )
 
-    return NextResponse.json({ project: safe, role })
+    return NextResponse.json({ project: safeProject, role })
   } catch (error) {
     console.error("Project fetch error:", error)
     return NextResponse.json({ error: "Failed" }, { status: 500 })

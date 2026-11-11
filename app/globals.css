@@ -4,8 +4,8 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ========================================
-   NEXUS CONTROL CENTER - Dark-only theme
-   Sharp corners. Cyan data. Zero softness.
+   SCUBA OPS — private game operations
+   Deep slate, signal cyan, restrained status colors.
    ======================================== */
 
 :root {
@@ -20,7 +20,7 @@
   --secondary: #141b2b;
   --secondary-foreground: #8899aa;
   --muted: #141b2b;
-  --muted-foreground: #5a6a7a;
+  --muted-foreground: #8899aa;
   --accent: #1a2438;
   --accent-foreground: #c8d6e5;
   --destructive: #ff3b4f;
@@ -33,7 +33,7 @@
   --chart-3: #ff9100;
   --chart-4: #7c4dff;
   --chart-5: #ff3b4f;
-  --radius: px;
+  --radius: 0.75rem;
   --sidebar: #070b12;
   --sidebar-foreground: #c8d6e5;
   --sidebar-primary: #00e5ff;
@@ -60,7 +60,7 @@
   --secondary: #e8ecf1;
   --secondary-foreground: #4a5f7f;
   --muted: #e8ecf1;
-  --muted-foreground: #6b7a8f;
+  --muted-foreground: #56677d;
   --accent: #f0f4f8;
   --accent-foreground: #1a1f2e;
   --destructive: #cc3333;
@@ -99,7 +99,7 @@
   --secondary: #141b2b;
   --secondary-foreground: #8899aa;
   --muted: #141b2b;
-  --muted-foreground: #5a6a7a;
+  --muted-foreground: #8899aa;
   --accent: #1a2438;
   --accent-foreground: #c8d6e5;
   --destructive: #ff3b4f;
@@ -127,8 +127,8 @@
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'JetBrains Mono', 'Geist Mono', 'Geist Mono Fallback', monospace;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-jetbrains-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -153,10 +153,10 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-xl: 0px;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);

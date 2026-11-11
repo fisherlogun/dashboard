@@ -82,7 +82,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setProjects(data.projects ?? [])
 
         // Auto-select project from localStorage or first
-        const savedId = typeof window !== "undefined" ? localStorage.getItem("nexus_active_project") : null
+        const savedId = typeof window !== "undefined" ? localStorage.getItem("scuba_active_project") : null
         const match = (data.projects ?? []).find((p: Project) => p.id === savedId)
         if (match) {
           setActiveProjectState(match)
@@ -98,16 +98,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const setActiveProject = useCallback((p: Project) => {
     setActiveProjectState(p)
     if (typeof window !== "undefined") {
-      localStorage.setItem("nexus_active_project", p.id)
+      localStorage.setItem("scuba_active_project", p.id)
     }
   }, [])
 
   const logout = useCallback(async () => {
-    await fetch("/api/auth/logout", { method: "POST" })
-    setUser(null)
-    setProjects([])
-    setActiveProjectState(null)
-    window.location.href = "/login"
+    try {
+      await fetch("/api/auth/logout", { method: "POST" })
+    } finally {
+      setUser(null)
+      setProjects([])
+      setActiveProjectState(null)
+      window.location.replace("/login")
+    }
   }, [])
 
   useEffect(() => {
