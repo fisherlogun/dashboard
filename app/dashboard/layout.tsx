@@ -11,9 +11,8 @@ const routeTitles: Record<string, string> = {
   "/dashboard": "Overview",
   "/dashboard/servers": "Live servers",
   "/dashboard/players": "Players",
-  "/dashboard/commands": "Commands",
-  "/dashboard/datastores": "Data stores",
-  "/dashboard/bans": "Moderation",
+  "/dashboard/commands": "Announcements",
+  "/dashboard/events": "Event schedule",
   "/dashboard/logs": "Activity log",
   "/dashboard/settings": "Private settings",
 }
@@ -39,13 +38,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="min-w-0">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border/70 bg-background/90 px-4 backdrop-blur-xl sm:px-6">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-[rgba(158,134,96,.38)] bg-background px-4 sm:px-6">
           <SidebarTrigger aria-label="Toggle navigation" />
           <Separator orientation="vertical" className="h-5" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold tracking-tight">{title}</p>
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-primary">
+          <div className="flex items-center gap-2 border border-primary/40 bg-primary/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
             <LockKeyhole aria-hidden="true" className="size-3" />
             <span className="hidden sm:inline">Owner session</span>
             <span className="sm:hidden">Private</span>
