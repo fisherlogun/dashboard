@@ -43,8 +43,8 @@ export function AppSidebar() {
   return (
     <Sidebar variant="sidebar" collapsible="icon">
       <SidebarHeader className="p-3">
-        <div className="flex items-center gap-3 rounded-xl border border-sidebar-border/70 bg-sidebar-accent/40 px-3 py-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+        <div className="flex items-center gap-3 border border-sidebar-border/70 bg-gradient-to-br from-sidebar-accent/70 to-transparent px-3 py-3">
+          <div className="flex size-9 shrink-0 items-center justify-center border border-primary/20 bg-primary/10 text-primary shadow-[0_0_22px_rgba(115,209,191,.08)]">
             <Waves aria-hidden="true" className="size-5" />
           </div>
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">
@@ -56,13 +56,13 @@ export function AppSidebar() {
 
       <SidebarContent className="px-2">
         <SidebarGroup>
-          <SidebarGroupLabel className="px-2 font-mono text-[9px] uppercase tracking-[0.18em]">Game</SidebarGroupLabel>
+          <SidebarGroupLabel className="px-2 font-mono text-[9px] uppercase tracking-[0.2em] text-sidebar-foreground/45">Operations</SidebarGroupLabel>
           <SidebarMenu>
             {navigation.map(({ href, label, key, icon: Icon }) => {
               const isActive = pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`))
               return (
                 <SidebarMenuItem key={href}>
-                  <SidebarMenuButton asChild isActive={isActive} tooltip={label}>
+                  <SidebarMenuButton asChild isActive={isActive} tooltip={label} className="h-10 text-[13px] data-[active=true]:border-l-2 data-[active=true]:border-l-sidebar-primary data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold data-[active=true]:text-sidebar-primary">
                     <Link href={href} aria-current={isActive ? "page" : undefined}>
                       <Icon aria-hidden="true" />
                       <span className="flex-1 uppercase">{label}</span>
@@ -78,7 +78,7 @@ export function AppSidebar() {
         <SidebarSeparator className="mx-2 w-auto" />
 
         <SidebarGroup>
-          <SidebarGroupLabel className="px-2 font-mono text-[9px] uppercase tracking-[0.18em]">Access</SidebarGroupLabel>
+          <SidebarGroupLabel className="px-2 font-mono text-[9px] uppercase tracking-[0.2em] text-sidebar-foreground/45">Workspace</SidebarGroupLabel>
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={pathname === "/dashboard/settings"} tooltip="Private settings">
@@ -93,7 +93,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="gap-2 p-3">
-        <div className="rounded-xl border border-sidebar-border/70 bg-sidebar-accent/30 p-3 group-data-[collapsible=icon]:hidden">
+        <div className="border border-sidebar-border/70 bg-sidebar-accent/25 p-3 group-data-[collapsible=icon]:hidden">
           <div className="flex items-center gap-2">
             <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
             <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-primary">Owner verified</span>
