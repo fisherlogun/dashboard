@@ -42,7 +42,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const isApi = pathname.startsWith("/api/")
-  const isPrivatePage = pathname === "/" || pathname.startsWith("/dashboard/") || pathname === "/dashboard" || pathname.startsWith("/setup/") || pathname === "/setup"
+  const isPrivatePage = pathname === "/" || pathname.startsWith("/dashboard/") || pathname === "/dashboard" || pathname.startsWith("/setup/") || pathname === "/setup" || pathname === "/unauthorized" || pathname.startsWith("/unauthorized/")
   if (!isApi && !isPrivatePage) return NextResponse.next()
 
   if (!isRobloxServerRoute && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
@@ -59,5 +59,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/dashboard/:path*", "/setup/:path*", "/api/:path*"],
+  matcher: ["/", "/dashboard/:path*", "/setup/:path*", "/unauthorized/:path*", "/api/:path*"],
 }

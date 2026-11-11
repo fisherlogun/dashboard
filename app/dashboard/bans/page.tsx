@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { useSession } from "@/components/session-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -93,7 +93,7 @@ export default function BansPage() {
     } catch { setLoading(false) }
   }, [activeProject])
 
-  useState(() => { fetchBans2() }, [fetchBans2])
+  useEffect(() => { void fetchBans2() }, [fetchBans2])
 
   const filtered = bans.filter((b) => b.roblox_user_id.includes(search) || b.reason.toLowerCase().includes(search.toLowerCase()))
   const active = filtered.filter((b) => b.active)

@@ -12,7 +12,7 @@ export async function GET() {
     const projects = await getProjectsForUser(session.userId)
     const gameProjects = projects
       .filter((project) => String(project.universe_id) === SCUBA_UNIVERSE_ID)
-      .map(({ api_key: _apiKey, ...project }) => project)
+      .map((project) => Object.fromEntries(Object.entries(project).filter(([key]) => key !== "api_key")))
 
     return NextResponse.json({ projects: gameProjects })
   } catch (error) {

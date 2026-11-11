@@ -24,6 +24,7 @@ interface User {
   profileUrl: string
   avatarUrl: string
   isGlobalAdmin: boolean
+  role: string
 }
 
 interface SessionContextType {

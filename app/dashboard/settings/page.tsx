@@ -120,6 +120,11 @@ export default function PrivateSettingsPage() {
             <div className="rounded-lg border border-border/70 bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
               Keep the relay key in a normal server Script under <code className="font-mono text-foreground">ServerScriptService</code>. Never place it in a LocalScript or a replicated object.
             </div>
+            <ol className="grid gap-2 rounded-lg border border-border/70 bg-background/50 p-4 text-xs leading-relaxed text-muted-foreground sm:grid-cols-3">
+              <li><span className="font-mono text-primary">01</span> Put the server file in <code>ServerScriptService</code>.</li>
+              <li><span className="font-mono text-primary">02</span> Put the client UI file in <code>StarterPlayerScripts</code>.</li>
+              <li><span className="font-mono text-primary">03</span> Enable HTTP requests and MessagingService for the experience.</li>
+            </ol>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={() => void revealRelayKey()} disabled={busy}>
                 {busy ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <KeyRound data-icon="inline-start" />}

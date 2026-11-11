@@ -275,7 +275,16 @@ export async function getLatestServerHeartbeat(projectId: string): Promise<strin
 
 export async function cleanupStaleServers() {
   const q = sql()
-  await q`DELETE FROM live_servers WHERE last_heartbeat < NOW() - INTERVAL '60 seconds'`
+  await q`
+    DELETE FROM live_servers stale
+    WHERE stale.last_heartbeat < NOW() - INTERVAL '60 seconds'
+      AND EXISTS (
+        SELECT 1 FROM live_servers newer
+        WHERE newer.project_id = stale.project_id
+          AND (newer.last_heartbeat > stale.last_heartbeat
+            OR (newer.last_heartbeat = stale.last_heartbeat AND newer.id > stale.id))
+      )
+  `
   await q`DELETE FROM live_players WHERE last_heartbeat < NOW() - INTERVAL '60 seconds'`
 }
 

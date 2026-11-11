@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     if (!project || !verifyProjectRelayKey(projectId, apiKey)) return NextResponse.json({ error: "Invalid relay key" }, { status: 403 })
 
     const bans = await getBans(projectId)
-    const activeBan = bans.find((b: { roblox_user_id: string; active: boolean; expires_at: string | null }) => {
+    const activeBan = bans.find((b) => {
       if (b.roblox_user_id !== userId || !b.active) return false
       if (b.expires_at && new Date(b.expires_at) < new Date()) return false
       return true
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Check if user was previously banned but is now unbanned
-    const inactiveBan = bans.find((b: { roblox_user_id: string; active: boolean }) => b.roblox_user_id === userId && !b.active)
+    const inactiveBan = bans.find((b) => b.roblox_user_id === userId && !b.active)
 
     return NextResponse.json({ banned: false, wasUnbanned: !!inactiveBan })
   } catch (error) {

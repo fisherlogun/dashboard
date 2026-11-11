@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       servers: servers.length,
       players: totalPlayers,
-      lastHeartbeatAt: latestHeartbeat,
+      lastHeartbeatAt: latestHeartbeat ?? ((history[history.length - 1] as Record<string, string> | undefined)?.recorded_at ?? null),
       totalCapacity,
       avgFps: Math.round(avgFps * 10) / 10,
       avgPing: Math.round(avgPing * 10) / 10,
