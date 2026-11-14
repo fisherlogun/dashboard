@@ -12,6 +12,7 @@ export const ISLANDS = [
   { id: "deep", name: "Stormwatch Isle" },
   { id: "trench", name: "Midnight Isle" },
   { id: "atlantis", name: "Atlantis Gate" },
+  { id: "aurora_reach", name: "Aurora Reach" },
 ] as const
 
 export const BREWS = [
@@ -40,6 +41,7 @@ export const FINDS_BY_ISLAND = {
   deep: [["deep_scallop", "Deep Scallop"], ["lanternfish", "Lanternfish"], ["sunken_amphora", "Sunken Amphora"], ["hatchetfish", "Hatchetfish"], ["giant_clam", "Giant Clam"], ["steel_anchor", "Steel Anchor"], ["manta", "Oceanic Manta"], ["gold_compass", "Navigator's Compass"], ["royal_goblet", "Royal Goblet"], ["blue_shark", "Blue Shark"], ["sapphire_crown", "Sapphire Crown"], ["abyss_locker", "Abyss Locker"], ["leviathan_scale", "Leviathan Scale"]],
   trench: [["lanternjaw", "Lanternjaw"], ["obsidian", "Obsidian Shard"], ["ghost_shell", "Ghost Shell"], ["bone_star", "Bone Starfish"], ["thermal_pearl", "Thermal Pearl"], ["vent_crystal", "Vent Crystal"], ["abyss_jelly", "Abyss Jelly"], ["research_probe", "Lost Research Probe"], ["gulper", "Abyssal Gulper"], ["void_gem", "Void Gem"], ["trench_idol", "Trench Idol"], ["phantom_shark", "Phantom Shark"], ["abyssal_eye", "The Abyssal Eye"]],
   atlantis: [["atlantean_coins", "Atlantean Coins"], ["rune_tablet", "Rune Tablet"], ["orichalcum", "Orichalcum Shard"], ["temple_amphora", "Temple Amphora"], ["tide_pearl", "Tide Pearl"], ["oracle_orb", "Oracle Orb"], ["atlantean_helm", "Atlantean Helm"], ["sacred_goblet", "Sacred Goblet"], ["guardian_tablet", "Guardian Tablet"], ["poseidons_trident", "Poseidon's Trident"], ["crown_of_atlantis", "Crown of Atlantis"], ["golden_manta", "Golden Manta"], ["guardian_idol", "Guardian Idol"], ["heart_of_atlantis", "Heart of Atlantis"]],
+  aurora_reach: [],
 } as const
 
 export const VARIANTS = ["Golden", "Crystal", "Ancient", "Glowing", "Shiny", "Prismatic"] as const

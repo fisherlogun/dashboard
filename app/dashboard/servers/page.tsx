@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useSession } from "@/components/session-provider"
+import { ISLAND_LABELS } from "@/lib/game-catalog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -222,7 +223,7 @@ export default function ServersPage() {
                               <div className="min-w-0">
                                 <span className="font-mono text-[10px] text-foreground truncate block">{p.display_name}</span>
                                 <span className="font-mono text-[9px] text-muted-foreground truncate block">{p.user_id}</span>
-                                <span className="font-mono text-[9px] text-muted-foreground truncate block">Lv {p.level ?? "—"} · ${p.cash?.toLocaleString() ?? "—"} · {p.island ?? "—"}</span>
+                                <span className="font-mono text-[9px] text-muted-foreground truncate block">Lv {p.level ?? "—"} · ${p.cash?.toLocaleString() ?? "—"} · {ISLAND_LABELS[p.island ?? ""] ?? p.island ?? "—"}</span>
                               </div>
                             </div>
                           ))}
