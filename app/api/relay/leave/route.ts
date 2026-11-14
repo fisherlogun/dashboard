@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getProject, removeLivePlayer } from "@/lib/db"
+import { getProject, removeLivePlayer, closePlayerSession } from "@/lib/db"
 import { verifyProjectRelayKey } from "@/lib/relay-auth"
 
 export const runtime = "nodejs"
@@ -20,7 +20,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized relay" }, { status: 401 })
     }
 
-    await removeLivePlayer(projectId, userId, serverId)
+    await Promise.all([
+      removeLivePlayer(projectId, userId, serverId),
+      closePlayerSession(projectId, userId, serverId),
+    ])
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error("Player leave relay error:", error)

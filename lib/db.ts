@@ -350,6 +350,91 @@ export async function getPlayersInServer(projectId: string, serverId: string) {
   `
 }
 
+// ---------- Player Sessions ----------
+
+export async function recordPlayerJoin(data: {
+  userId: string
+  projectId: string
+  robloxUserId: string
+  username: string
+  displayName: string
+  avatarUrl: string | null
+  serverId: string
+}) {
+  const q = sql()
+  await q`
+    UPDATE public.player_sessions SET left_at = last_seen_at
+    WHERE project_id = ${data.projectId} AND roblox_user_id = ${data.robloxUserId}
+      AND left_at IS NULL AND last_seen_at < NOW() - INTERVAL '90 seconds'
+  `
+  await q`
+    INSERT INTO public.player_sessions (user_id, project_id, roblox_user_id, username, display_name, avatar_url, server_id)
+    VALUES (${data.userId}, ${data.projectId}, ${data.robloxUserId}, ${data.username}, ${data.displayName}, ${data.avatarUrl}, ${data.serverId})
+    ON CONFLICT (project_id, roblox_user_id) WHERE left_at IS NULL DO UPDATE SET
+      username = EXCLUDED.username,
+      display_name = EXCLUDED.display_name,
+      avatar_url = COALESCE(EXCLUDED.avatar_url, player_sessions.avatar_url),
+      server_id = EXCLUDED.server_id,
+      last_seen_at = NOW()
+  `
+}
+
+export async function touchPlayerSession(projectId: string, robloxUserId: string, serverId: string) {
+  const q = sql()
+  await q`UPDATE public.player_sessions SET last_seen_at = NOW() WHERE project_id = ${projectId} AND roblox_user_id = ${robloxUserId} AND server_id = ${serverId} AND left_at IS NULL`
+}
+
+export async function closePlayerSession(projectId: string, robloxUserId: string, serverId: string) {
+  const q = sql()
+  await q`UPDATE public.player_sessions SET left_at = NOW(), last_seen_at = NOW() WHERE project_id = ${projectId} AND roblox_user_id = ${robloxUserId} AND server_id = ${serverId} AND left_at IS NULL`
+}
+
+export async function getPlayerAnalytics(projectId: string, days = 30) {
+  const q = sql()
+  const boundedDays = Math.max(7, Math.min(90, Math.floor(days)))
+  const since = new Date(Date.now() - boundedDays * 24 * 60 * 60 * 1000).toISOString()
+  const [summary, daily, players] = await Promise.all([
+    q`
+      SELECT COUNT(*)::int AS sessions,
+        COUNT(DISTINCT roblox_user_id)::int AS unique_players,
+        COUNT(DISTINCT roblox_user_id) FILTER (WHERE joined_at >= NOW() - INTERVAL '1 day')::int AS dau,
+        COUNT(DISTINCT roblox_user_id) FILTER (WHERE joined_at >= NOW() - INTERVAL '7 days')::int AS wau,
+        COUNT(DISTINCT roblox_user_id) FILTER (WHERE joined_at >= NOW() - INTERVAL '30 days')::int AS mau,
+        COUNT(*) FILTER (WHERE joined_at >= NOW() - INTERVAL '30 days' AND prior.first_join IS NOT NULL)::int AS returning_sessions,
+        COALESCE(AVG(EXTRACT(EPOCH FROM (COALESCE(left_at, last_seen_at) - joined_at))) FILTER (WHERE joined_at >= NOW() - INTERVAL '30 days'), 0)::float AS avg_session_seconds
+      FROM public.player_sessions s
+      LEFT JOIN LATERAL (
+        SELECT MIN(p.joined_at) AS first_join FROM public.player_sessions p
+        WHERE p.project_id = s.project_id AND p.roblox_user_id = s.roblox_user_id AND p.joined_at < s.joined_at
+      ) prior ON TRUE
+      WHERE s.project_id = ${projectId} AND s.joined_at >= ${since}
+    `,
+    q`
+      SELECT date_trunc('day', joined_at)::date::text AS day,
+        COUNT(DISTINCT roblox_user_id)::int AS players,
+        COUNT(*)::int AS sessions,
+        COUNT(DISTINCT roblox_user_id) FILTER (WHERE prior.first_join IS NOT NULL)::int AS returning_players,
+        COALESCE(AVG(EXTRACT(EPOCH FROM (COALESCE(left_at, last_seen_at) - joined_at))), 0)::float AS avg_session_seconds
+      FROM public.player_sessions s
+      LEFT JOIN LATERAL (
+        SELECT MIN(p.joined_at) AS first_join FROM public.player_sessions p
+        WHERE p.project_id = s.project_id AND p.roblox_user_id = s.roblox_user_id AND p.joined_at < s.joined_at
+      ) prior ON TRUE
+      WHERE s.project_id = ${projectId} AND s.joined_at >= ${since}
+      GROUP BY 1 ORDER BY 1 ASC
+    `,
+    q`
+      SELECT roblox_user_id, username, display_name, avatar_url, COUNT(*)::int AS sessions,
+        MAX(joined_at)::text AS last_seen_at,
+        COALESCE(AVG(EXTRACT(EPOCH FROM (COALESCE(left_at, last_seen_at) - joined_at))), 0)::float AS avg_session_seconds
+      FROM public.player_sessions WHERE project_id = ${projectId} AND joined_at >= ${since}
+      GROUP BY roblox_user_id, username, display_name, avatar_url
+      ORDER BY sessions DESC, last_seen_at DESC LIMIT 10
+    `,
+  ])
+  return { summary: summary[0] ?? {}, daily, topPlayers: players }
+}
+
 // ---------- Player History ----------
 
 export async function addPlayerHistoryPoint(projectId: string, playerCount: number, serverCount: number) {

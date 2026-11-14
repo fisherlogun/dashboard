@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getProject, getLivePlayers, upsertLiveServer, upsertLivePlayer, addPlayerHistoryPoint, cleanupStaleServers, addActionLog } from "@/lib/db"
+import { getProject, getLivePlayers, upsertLiveServer, upsertLivePlayer, addPlayerHistoryPoint, cleanupStaleServers, addActionLog, recordPlayerJoin, touchPlayerSession } from "@/lib/db"
 import { verifyProjectRelayKey } from "@/lib/relay-auth"
 
 // This server-to-server endpoint accepts the project-specific relay key, never the Roblox Open Cloud key.
@@ -77,6 +77,15 @@ export async function POST(req: NextRequest) {
 
         if (isNewToLiveSet) {
           try {
+            await recordPlayerJoin({
+              userId: String(project.owner_id),
+              projectId,
+              robloxUserId: userId,
+              username: typeof p.username === "string" ? p.username.slice(0, 50) : "Unknown",
+              displayName: typeof p.displayName === "string" ? p.displayName.slice(0, 80) : "Unknown",
+              avatarUrl,
+              serverId,
+            })
             await addActionLog(
               projectId,
               userId,
@@ -85,6 +94,8 @@ export async function POST(req: NextRequest) {
               JSON.stringify({ displayName: p.displayName || p.username, userId, avatarUrl }),
             )
           } catch { /* non-fatal */ }
+        } else {
+          try { await touchPlayerSession(projectId, userId, serverId) } catch { /* non-fatal */ }
         }
 
         knownUserIds.add(userId)

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useSession } from "@/components/session-provider"
+import { ISLAND_LABELS } from "@/lib/game-catalog"
 import { PlayerGrantDialog } from "@/components/dashboard/player-grant-panel"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -214,7 +215,7 @@ export function PlayersWorkspace({ initialTab = "online" }: { initialTab?: "onli
               </div>
               <div className="hidden font-mono text-[10px] text-foreground lg:block lg:col-span-1">{player.level ?? "—"}</div>
               <div className="hidden font-mono text-[10px] text-foreground lg:block lg:col-span-1">{player.cash === null ? "—" : `$${player.cash.toLocaleString()}`}</div>
-              <div className="hidden truncate font-mono text-[10px] text-foreground xl:block xl:col-span-1">{player.island || "—"}</div>
+              <div className="hidden truncate font-mono text-[10px] text-foreground xl:block xl:col-span-1">{ISLAND_LABELS[player.island ?? ""] ?? player.island ?? "—"}</div>
               <div className="hidden font-mono text-[10px] text-muted-foreground md:block md:col-span-1">{player.server_id.slice(0, 7)}…</div>
               <div className="hidden items-center gap-1 md:flex md:col-span-1"><Clock aria-hidden="true" className="size-3 text-muted-foreground" /><span className="font-mono text-[10px] text-foreground">{formatPlayTime(player.play_time)}</span></div>
               <div className="hidden font-mono text-[10px] text-muted-foreground lg:block lg:col-span-1">{player.account_age}d</div>
