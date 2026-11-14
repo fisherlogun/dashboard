@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getProject, upsertLivePlayer, addActionLog } from "@/lib/db"
+import { getProject, upsertLivePlayer, addActionLog, recordPlayerJoin } from "@/lib/db"
 import { verifyProjectRelayKey } from "@/lib/relay-auth"
 import { getUserThumbnail } from "@/lib/roblox"
 
@@ -38,6 +38,15 @@ export async function POST(request: NextRequest) {
       playTime: 0,
       accountAge,
       avatarUrl,
+    })
+    await recordPlayerJoin({
+      userId: String(project.owner_id),
+      projectId,
+      robloxUserId: userId,
+      username,
+      displayName: displayName || username,
+      avatarUrl,
+      serverId,
     })
     await addActionLog(
       projectId,

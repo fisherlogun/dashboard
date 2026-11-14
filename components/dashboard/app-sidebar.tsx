@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   Activity,
+  BarChart3,
   CalendarClock,
   LayoutDashboard,
   LogOut,
@@ -32,6 +33,7 @@ const navigation = [
   { href: "/dashboard/events", label: "Events", key: "E", icon: CalendarClock },
   { href: "/dashboard/servers", label: "Live servers", key: "S", icon: Server },
   { href: "/dashboard/players", label: "Players", key: "P", icon: Users },
+  { href: "/dashboard/analytics", label: "Analytics", key: "N", icon: BarChart3 },
   { href: "/dashboard/commands", label: "Announcements", key: "A", icon: Megaphone },
   { href: "/dashboard/logs", label: "Activity log", key: "L", icon: Activity },
 ]

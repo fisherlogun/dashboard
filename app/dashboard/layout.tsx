@@ -12,6 +12,7 @@ const routeTitles: Record<string, string> = {
   "/dashboard": "Overview",
   "/dashboard/servers": "Live servers",
   "/dashboard/players": "Players",
+  "/dashboard/analytics": "Game analytics",
   "/dashboard/commands": "Announcements",
   "/dashboard/events": "Event schedule",
   "/dashboard/logs": "Activity log",
