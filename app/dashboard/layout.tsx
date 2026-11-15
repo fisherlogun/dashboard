@@ -7,6 +7,7 @@ import { AppSidebar } from "@/components/dashboard/app-sidebar"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { useSession } from "@/components/session-provider"
+import { formatEasternTime } from "@/lib/time-format"
 
 const routeTitles: Record<string, string> = {
   "/dashboard": "Overview",
@@ -23,7 +24,7 @@ function LocalClock() {
   const [time, setTime] = useState("")
 
   useEffect(() => {
-    const update = () => setTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))
+    const update = () => setTime(formatEasternTime(new Date()))
     update()
     const interval = window.setInterval(update, 30_000)
     return () => window.clearInterval(interval)
@@ -59,7 +60,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span className="sm:hidden">Private</span>
           </div>
           <div className="hidden flex-col items-end sm:flex">
-            <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">Local time</span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">Eastern time</span>
             <LocalClock />
           </div>
         </header>

@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatEasternTime } from "@/lib/time-format"
 
 export interface JoinEvent {
   id?: string | number
@@ -64,7 +65,7 @@ export function RecentJoins({ events }: { events: JoinEvent[] }) {
                     <p className="truncate font-mono text-[10px] text-muted-foreground">{event.user_id ? `USER ${event.user_id}` : "PLAYER JOINED"}</p>
                   </div>
                   <time className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground" dateTime={event.created_at}>
-                    {event.created_at ? new Date(event.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
+                    {event.created_at ? formatEasternTime(event.created_at) : "—"}
                   </time>
                 </li>
               )

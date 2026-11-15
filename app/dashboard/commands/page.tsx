@@ -13,6 +13,7 @@ import { Terminal, Loader2, Zap, Megaphone, AlertTriangle, ShieldBan, Send, Chec
 import { toast } from "sonner"
 import { DateTimePicker } from "@/components/date-time-picker"
 import { AnnouncementPreview } from "@/components/dashboard/announcement-preview"
+import { formatEasternTime } from "@/lib/time-format"
 
 const announcementColors = { announcement: "#E2C27A", update: "#70C4BA", event: "#7FE08A", warning: "#CE5C50", maintenance: "#E8A05A" } as const
 const fetcher = async (url: string) => {
@@ -199,7 +200,7 @@ export default function CommandsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <Badge variant="outline" className="text-[10px] font-mono h-4 px-1">{e.type.toUpperCase()}</Badge>
-                      <span className="text-[10px] font-mono text-muted-foreground">{e.time.toLocaleTimeString()}</span>
+                      <span className="text-[10px] font-mono text-muted-foreground">{formatEasternTime(e.time)}</span>
                     </div>
                     <p className="text-[10px] font-mono text-foreground truncate mt-0.5">{e.details}</p>
                   </div>
