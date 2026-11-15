@@ -3,6 +3,7 @@
 import useSWR from "swr"
 import Link from "next/link"
 import { useSession } from "@/components/session-provider"
+import { formatEasternDateTime } from "@/lib/time-format"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -170,7 +171,7 @@ export function OverviewDashboard() {
         </Card>
         <Card className="border-border/70 bg-card/80">
           <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0"><div><CardTitle className="flex items-center gap-2 text-base"><CalendarClock aria-hidden="true" className="size-4 text-primary" />Next scheduled event</CardTitle><CardDescription>Calculated from the shared UTC schedule</CardDescription></div><Button asChild variant="outline" size="sm"><Link href="/dashboard/events">Calendar</Link></Button></CardHeader>
-          <CardContent>{eventOverview?.nextScheduledEvent ? <div className="rounded-md border border-border/60 px-3 py-3"><p className="font-medium">{eventOverview.nextScheduledEvent.label}</p><p className="mt-1 text-sm text-muted-foreground">{eventOverview.nextScheduledEvent.event} · {eventOverview.nextScheduledEvent.minutes} min</p><p className="mt-2 font-mono text-xs text-primary">{new Date(eventOverview.nextScheduledEvent.nextStart * 1000).toLocaleString()}</p></div> : <p className="text-sm text-muted-foreground">No enabled event is scheduled.</p>}</CardContent>
+          <CardContent>{eventOverview?.nextScheduledEvent ? <div className="rounded-md border border-border/60 px-3 py-3"><p className="font-medium">{eventOverview.nextScheduledEvent.label}</p><p className="mt-1 text-sm text-muted-foreground">{eventOverview.nextScheduledEvent.event} · {eventOverview.nextScheduledEvent.minutes} min</p><p className="mt-2 font-mono text-xs text-primary">{formatEasternDateTime(eventOverview.nextScheduledEvent.nextStart * 1000)}</p></div> : <p className="text-sm text-muted-foreground">No enabled event is scheduled.</p>}</CardContent>
         </Card>
       </section>
 

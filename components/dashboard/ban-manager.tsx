@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { ShieldBan, Search, Loader2, Clock, Ban, ShieldOff, ChevronDown, ChevronUp } from "lucide-react"
 import { toast } from "sonner"
 import { DateTimePicker } from "@/components/date-time-picker"
+import { formatEasternDateTime } from "@/lib/time-format"
 
 interface BanRecord {
   id: string
@@ -79,7 +80,7 @@ export function BanManager() {
     if (duration === "permanent") return "PERMANENT"
     if (duration === "custom" && expiresAt) {
       const expiry = new Date(expiresAt)
-      return expiry.toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
+      return formatEasternDateTime(expiry, { hour12: false })
     }
     const map: Record<string, string> = { "1h": "1H", "6h": "6H", "12h": "12H", "1d": "1D", "3d": "3D", "7d": "7D", "30d": "30D" }
     return map[duration] || duration.toUpperCase()
@@ -178,13 +179,13 @@ export function BanManager() {
                 <div className="border border-t-0 border-border bg-card/50 p-3 space-y-2">
                   <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
                     <span className="text-muted-foreground">Issued:</span>
-                    <span className="text-foreground">{new Date(ban.created_at).toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</span>
+                    <span className="text-foreground">{formatEasternDateTime(ban.created_at, { second: "2-digit", hour12: false })}</span>
                     <span className="text-muted-foreground">Issued By:</span>
                     <span className="text-foreground">{ban.banned_by_name}</span>
                     {ban.expires_at && (
                       <>
                         <span className="text-muted-foreground">Expires:</span>
-                        <span className="text-foreground">{new Date(ban.expires_at).toLocaleString("en-US", { month: "short", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</span>
+                        <span className="text-foreground">{formatEasternDateTime(ban.expires_at, { second: "2-digit", hour12: false })}</span>
                       </>
                     )}
                   </div>

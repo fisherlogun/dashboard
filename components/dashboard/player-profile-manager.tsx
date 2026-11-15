@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { BREWS, FINDS_BY_ISLAND, GEAR_BY_SLOT, ISLANDS, SECRET_SITES, VARIANTS } from "@/lib/game-catalog"
+import { formatEasternDateTime } from "@/lib/time-format"
 
 interface PlayerSummary {
   userId: string
@@ -58,7 +59,7 @@ function equal(left: unknown, right: unknown) { return JSON.stringify(left) === 
 function shortDate(value?: string | null) {
   if (!value) return "Unknown"
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? "Unknown" : date.toLocaleString()
+  return Number.isNaN(date.getTime()) ? "Unknown" : formatEasternDateTime(date)
 }
 
 function ProfileEditor({ profile, onSaved }: { profile: ProfileData; onSaved: () => void }) {

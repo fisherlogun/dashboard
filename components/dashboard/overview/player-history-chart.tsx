@@ -1,5 +1,6 @@
 import { Area, AreaChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts"
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart"
+import { formatEasternDateTime, formatEasternTime } from "@/lib/time-format"
 
 export interface HistoryPoint {
   recorded_at: string
@@ -32,7 +33,7 @@ export function PlayerHistoryChart({ history }: { history: HistoryPoint[] }) {
           minTickGap={28}
           tickMargin={10}
           tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-          tickFormatter={(value: string) => new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          tickFormatter={(value: string) => formatEasternTime(value)}
         />
         <YAxis
           allowDecimals={false}
@@ -43,7 +44,7 @@ export function PlayerHistoryChart({ history }: { history: HistoryPoint[] }) {
         />
         <Tooltip
           cursor={false}
-          content={<ChartTooltipContent indicator="line" labelFormatter={(value) => new Date(String(value)).toLocaleString()} />}
+          content={<ChartTooltipContent indicator="line" labelFormatter={(value) => formatEasternDateTime(String(value))} />}
         />
         <Area
           dataKey="players"
