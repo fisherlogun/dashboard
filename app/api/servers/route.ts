@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { projectId, action, serverId, message, title, style, duration } = body
     if (!projectId) return NextResponse.json({ error: "projectId required" }, { status: 400 })
-    if (!["shutdown_server", "shutdown_all", "announce"].includes(action)) return NextResponse.json({ error: "Invalid server action" }, { status: 400 })
+    if (!["shutdown_server", "shutdown_all", "soft_shutdown", "announce"].includes(action)) return NextResponse.json({ error: "Invalid server action" }, { status: 400 })
     if (action === "shutdown_server" && (typeof serverId !== "string" || serverId.length > 128)) return NextResponse.json({ error: "A valid server ID is required" }, { status: 400 })
     if (action === "announce" && (typeof message !== "string" || !message.trim() || message.length > 200)) return NextResponse.json({ error: "Announcement must be 1–200 characters" }, { status: 400 })
     if (action === "announce" && typeof title === "string" && title.length > 60) return NextResponse.json({ error: "Announcement title must be at most 60 characters" }, { status: 400 })
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     const project = await getProject(projectId)
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
 
-    const command = {
+    const command = action === "soft_shutdown" ? { type: "soft_shutdown" } : {
       type: action,
       ...(serverId ? { serverId } : {}),
       ...(typeof message === "string" ? { message: message.trim().slice(0, 200) } : {}),

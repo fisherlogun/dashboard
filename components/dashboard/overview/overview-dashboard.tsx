@@ -87,6 +87,20 @@ export function OverviewDashboard() {
     await mutate()
   }
 
+  async function softShutdownAllServers() {
+    if (!activeProject || !window.confirm("Soft shut down all live Scuba Simulator servers? Players may be moved or allowed to reconnect by the game’s soft-shutdown handler.")) return
+    const response = await fetch("/api/servers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: activeProject.id, action: "soft_shutdown" }),
+    })
+    if (!response.ok) {
+      window.alert("The soft-shutdown command could not be sent. Check the Roblox Open Cloud key and MessagingService permissions.")
+      return
+    }
+    await mutate()
+  }
+
   if (sessionLoading || (!activeProject && !error && isLoading)) {
     return <div className="h-72 animate-pulse rounded-2xl border border-border/60 bg-muted/30" aria-label="Loading private game data" />
   }
@@ -128,6 +142,7 @@ export function OverviewDashboard() {
         isRefreshing={isValidating}
         onRefresh={() => void mutate()}
         onShutdown={() => void shutDownAllServers()}
+          onSoftShutdown={() => void softShutdownAllServers()}
       />
 
       {error && (

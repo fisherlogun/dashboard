@@ -1,4 +1,4 @@
-import { ArrowUpRight, LockKeyhole, RefreshCw, Server, ShieldCheck, Waves } from "lucide-react"
+import { ArrowUpRight, LockKeyhole, Power, RefreshCw, Server, ShieldCheck, Waves } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 
@@ -17,6 +17,7 @@ interface ExperienceHeroProps {
   isRefreshing: boolean
   onRefresh: () => void
   onShutdown: () => void
+  onSoftShutdown: () => void
 }
 
 export function ExperienceHero({
@@ -34,6 +35,7 @@ export function ExperienceHero({
   isRefreshing,
   onRefresh,
   onShutdown,
+  onSoftShutdown,
 }: ExperienceHeroProps) {
   const occupancy = totalCapacity > 0 ? Math.min(100, Math.round((players / totalCapacity) * 100)) : 0
   const relayStatus = hasError
@@ -66,10 +68,13 @@ export function ExperienceHero({
               UNIVERSE {universeId}
             </Badge>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={isRefreshing} className="border-white/20 bg-black/25 text-white hover:bg-white/10 hover:text-white">
               <RefreshCw data-icon="inline-start" className={isRefreshing ? "animate-spin" : ""} />
               Refresh
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={onSoftShutdown} disabled={!servers} className="border-amber-400/50 bg-amber-950/40 text-amber-100 hover:bg-amber-900/60 hover:text-white">
+              <Power data-icon="inline-start" /> Soft shutdown
             </Button>
             <Button type="button" variant="destructive" size="sm" onClick={onShutdown} disabled={!servers}>
               <Server data-icon="inline-start" /> Shut down
