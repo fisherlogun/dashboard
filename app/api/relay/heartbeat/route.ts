@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getProject, getLivePlayers, upsertLiveServer, upsertLivePlayer, addPlayerHistoryPoint, cleanupStaleServers, addActionLog, recordPlayerJoin, touchPlayerSession } from "@/lib/db"
 import { verifyProjectRelayKey } from "@/lib/relay-auth"
+import { VESSEL_BY_ID } from "@/lib/game-catalog"
 
 // This server-to-server endpoint accepts the project-specific relay key, never the Roblox Open Cloud key.
 
@@ -73,6 +74,9 @@ export async function POST(req: NextRequest) {
           level: Number.isSafeInteger(p.level) && p.level >= 0 ? p.level : null,
           cash: Number.isSafeInteger(p.cash) && p.cash >= 0 ? p.cash : null,
           island: typeof p.island === "string" ? p.island.slice(0, 80) : null,
+          clams: Number.isSafeInteger(p.clams) && p.clams >= 0 && p.clams <= 100_000 ? p.clams : null,
+          boat: typeof p.boat === "string" && VESSEL_BY_ID[p.boat]?.kind === "boat" ? p.boat : null,
+          sub: typeof p.sub === "string" && VESSEL_BY_ID[p.sub]?.kind === "sub" ? p.sub : null,
         })
 
         if (isNewToLiveSet) {
