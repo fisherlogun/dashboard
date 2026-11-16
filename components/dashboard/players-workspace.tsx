@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useSession } from "@/components/session-provider"
-import { ISLAND_LABELS } from "@/lib/game-catalog"
+import { ISLAND_LABELS, VESSEL_BY_ID } from "@/lib/game-catalog"
 import { PlayerGrantDialog } from "@/components/dashboard/player-grant-panel"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -37,6 +37,9 @@ interface Player {
   avatar_url: string
   level: number | null
   cash: number | null
+  clams: number | null
+  boat: string | null
+  sub: string | null
   island: string | null
 }
 
@@ -194,19 +197,22 @@ export function PlayersWorkspace({ initialTab = "online" }: { initialTab?: "onli
       ) : (
         <div className="border border-border bg-card divide-y divide-border">
           {/* Table header */}
-          <div className="grid grid-cols-12 gap-2 bg-muted/50 px-4 py-2">
-            <span className="col-span-10 font-mono text-[9px] uppercase tracking-widest text-muted-foreground md:col-span-4">Player</span>
+          <div className="grid grid-cols-12 gap-2 bg-muted/50 px-4 py-2 lg:grid-cols-[repeat(16,minmax(0,1fr))]">
+            <span className="col-span-10 font-mono text-[9px] uppercase tracking-widest text-muted-foreground md:col-span-4 lg:col-span-4">Player</span>
             <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Level</span>
             <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Cash</span>
+            <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Clams</span>
+            <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Boat</span>
+            <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Sub</span>
             <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground xl:block xl:col-span-1">Island</span>
             <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground md:block md:col-span-1">Server</span>
             <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground md:block md:col-span-1">Time</span>
             <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Age</span>
-            <span className="col-span-2 text-right font-mono text-[9px] uppercase tracking-widest text-muted-foreground">Actions</span>
+            <span className="col-span-2 text-right font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:col-span-3">Actions</span>
           </div>
           {filtered.map(player => (
-            <div key={player.user_id} className="grid grid-cols-12 items-center gap-2 px-4 py-2.5 transition-colors hover:bg-accent/30">
-              <div className="col-span-10 flex min-w-0 items-center gap-3 md:col-span-4">
+            <div key={player.user_id} className="grid grid-cols-12 items-center gap-2 px-4 py-2.5 transition-colors hover:bg-accent/30 lg:grid-cols-[repeat(16,minmax(0,1fr))]">
+              <div className="col-span-10 flex min-w-0 items-center gap-3 md:col-span-4 lg:col-span-4">
                 <img src={player.avatar_url} alt="" className="size-7 shrink-0 border border-border" crossOrigin="anonymous" />
                 <div className="min-w-0">
                   <Link href={`/dashboard/players?tab=profiles&userId=${encodeURIComponent(player.user_id)}`} onClick={() => setActiveTab("profiles")} className="block truncate font-mono text-xs text-foreground hover:text-primary">{player.display_name}</Link>
@@ -215,11 +221,14 @@ export function PlayersWorkspace({ initialTab = "online" }: { initialTab?: "onli
               </div>
               <div className="hidden font-mono text-[10px] text-foreground lg:block lg:col-span-1">{player.level ?? "—"}</div>
               <div className="hidden font-mono text-[10px] text-foreground lg:block lg:col-span-1">{player.cash === null ? "—" : `$${player.cash.toLocaleString()}`}</div>
+              <div className="hidden font-mono text-[10px] text-foreground lg:block lg:col-span-1">{player.clams === null ? "—" : player.clams.toLocaleString()}</div>
+              <div className="hidden truncate font-mono text-[10px] text-foreground lg:block lg:col-span-1">{VESSEL_BY_ID[player.boat ?? ""]?.name ?? player.boat ?? "—"}</div>
+              <div className="hidden truncate font-mono text-[10px] text-foreground lg:block lg:col-span-1">{VESSEL_BY_ID[player.sub ?? ""]?.name ?? player.sub ?? "—"}</div>
               <div className="hidden truncate font-mono text-[10px] text-foreground xl:block xl:col-span-1">{ISLAND_LABELS[player.island ?? ""] ?? player.island ?? "—"}</div>
               <div className="hidden font-mono text-[10px] text-muted-foreground md:block md:col-span-1">{player.server_id.slice(0, 7)}…</div>
               <div className="hidden items-center gap-1 md:flex md:col-span-1"><Clock aria-hidden="true" className="size-3 text-muted-foreground" /><span className="font-mono text-[10px] text-foreground">{formatPlayTime(player.play_time)}</span></div>
               <div className="hidden font-mono text-[10px] text-muted-foreground lg:block lg:col-span-1">{player.account_age}d</div>
-              <div className="col-span-2 flex items-center justify-end gap-1">
+              <div className="col-span-2 flex items-center justify-end gap-1 lg:col-span-3">
                 <Link href={`/dashboard/players?tab=profiles&userId=${encodeURIComponent(player.user_id)}`} onClick={() => setActiveTab("profiles")} aria-label={`Open ${player.display_name} profile`} title="Open profile" className="rounded p-1 text-muted-foreground transition-colors hover:text-primary"><UserRound aria-hidden="true" className="size-3.5" /></Link>
                 <button type="button" onClick={() => setGrantTarget(player)} className="rounded p-1 text-muted-foreground transition-colors hover:text-primary" aria-label={`Give or change ${player.display_name} data`} title="Give / change"><Gift aria-hidden="true" className="size-3.5" /></button>
                 <button type="button" onClick={() => openAction(player, "message")} className="rounded p-1 text-muted-foreground transition-colors hover:text-primary" aria-label={`Message ${player.display_name}`} title="Message"><MessageSquare aria-hidden="true" className="size-3.5" /></button>

@@ -87,9 +87,22 @@ CREATE TABLE IF NOT EXISTS live_players (
   play_time INT DEFAULT 0,
   account_age INT DEFAULT 0,
   avatar_url TEXT,
+  level INT,
+  cash BIGINT,
+  island TEXT,
+  clams INT,
+  boat TEXT,
+  sub TEXT,
   last_heartbeat TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (user_id, project_id)
 );
+
+ALTER TABLE live_players ADD COLUMN IF NOT EXISTS level INT;
+ALTER TABLE live_players ADD COLUMN IF NOT EXISTS cash BIGINT;
+ALTER TABLE live_players ADD COLUMN IF NOT EXISTS island TEXT;
+ALTER TABLE live_players ADD COLUMN IF NOT EXISTS clams INT;
+ALTER TABLE live_players ADD COLUMN IF NOT EXISTS boat TEXT;
+ALTER TABLE live_players ADD COLUMN IF NOT EXISTS sub TEXT;
 
 CREATE TABLE IF NOT EXISTS player_history (
   id SERIAL PRIMARY KEY,

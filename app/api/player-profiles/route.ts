@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { addActionLog, getLivePlayers, getMemberRole, getProjectById, isGlobalAdmin } from "@/lib/db"
-import { BREW_IDS, FIND_IDS, GEAR_BY_SLOT, GEAR_IDS, ISLAND_IDS, SECRET_SITES, VARIANTS } from "@/lib/game-catalog"
+import { BREW_IDS, FIND_IDS, GEAR_BY_SLOT, GEAR_IDS, ISLAND_IDS, LEGACY_VESSEL_GEAR_IDS, SECRET_SITES, STARTER_VESSEL_IDS, VARIANTS, VESSEL_BY_ID, VESSEL_IDS } from "@/lib/game-catalog"
 import { getRobloxProfiles, resolveRobloxUsername, searchCachedRobloxProfiles } from "@/lib/roblox-user-cache"
 import {
   DatastoreConflictError,
@@ -20,7 +20,7 @@ type RobloxProject = { universe_id: string; api_key: string }
 
 const PROFILE_STORE = "DeepDive_PlayerData_v1"
 const CONTROL_STORE = "ScubaOps"
-const READ_ONLY_FIELDS = ["Earned", "Index", "Places", "Quests", "Achievements", "CompletedZones", "Daily", "Stats", "Receipts", "AdminSeen", "_lock", "Version", "FirstJoin"]
+const READ_ONLY_FIELDS = ["Earned", "Index", "Places", "Quests", "Achievements", "CompletedZones", "Daily", "Stats", "Pity", "Rolls", "VesselsMigrated", "ClamIntro", "Receipts", "AdminSeen", "_lock", "Version", "FirstJoin"]
 const profileObjectSchema = z.record(z.string(), z.unknown())
 
 class ProfileConflictError extends Error {
@@ -77,9 +77,11 @@ function validateProfile(profile: Record<string, unknown>, fields: string[] = Ob
     Level: { min: 1, max: 999 },
     XP: { min: 0, max: Number.MAX_SAFE_INTEGER },
     Rebirths: { min: 0, max: Number.MAX_SAFE_INTEGER },
+    Clams: { min: 0, max: 100_000 },
   }
   for (const [field, range] of Object.entries(integerRules)) {
-    if (!fields.includes(field) || profile[field] === undefined) continue
+    if (!fields.includes(field)) continue
+    if (profile[field] === undefined && field !== "Clams") continue
     const value = profile[field]
     if (!Number.isSafeInteger(value) || Number(value) < range.min || Number(value) > range.max) {
       throw new ProfileApiError(400, `${field} must be a valid integer between ${range.min} and ${range.max}`)
@@ -123,13 +125,31 @@ function validateProfile(profile: Record<string, unknown>, fields: string[] = Ob
       if (!GEAR_IDS.has(id) || typeof value !== "boolean") throw new ProfileApiError(400, "Owned contains invalid gear")
     }
   }
+  if (fields.includes("Vessels")) {
+    if (!isPlainRecord(profile.Vessels)) throw new ProfileApiError(400, "Vessels must be an object")
+    const baseVessels = isPlainRecord(baseData.Vessels) ? baseData.Vessels : {}
+    for (const [id, level] of Object.entries(profile.Vessels)) {
+      if (!VESSEL_IDS.has(id) && sameValue(baseVessels[id], level)) continue
+      if (!VESSEL_IDS.has(id) || !Number.isSafeInteger(level) || Number(level) < 1 || Number(level) > 6) throw new ProfileApiError(400, `Invalid vessel or level: ${id}`)
+    }
+    for (const id of STARTER_VESSEL_IDS) {
+      if (Object.prototype.hasOwnProperty.call(baseVessels, id) && !Object.prototype.hasOwnProperty.call(profile.Vessels, id)) throw new ProfileApiError(400, `Starter vessel ${id} cannot be removed`)
+    }
+  }
   if (fields.includes("Equipped") && profile.Equipped !== undefined) {
     if (!isPlainRecord(profile.Equipped)) throw new ProfileApiError(400, "Equipped must be an object")
+    const baseEquipped = isPlainRecord(baseData.Equipped) ? baseData.Equipped : {}
+    const vessels = isPlainRecord(profile.Vessels) ? profile.Vessels : isPlainRecord(baseData.Vessels) ? baseData.Vessels : {}
     for (const [slot, gearId] of Object.entries(profile.Equipped)) {
       if (typeof gearId !== "string") throw new ProfileApiError(400, `Invalid equipped gear for ${slot}`)
       const options = GEAR_BY_SLOT[slot as keyof typeof GEAR_BY_SLOT]
-      const baseEquipped = isPlainRecord(baseData.Equipped) ? baseData.Equipped : {}
       if (!options && sameValue(baseEquipped[slot], gearId)) continue
+      if (slot === "Boat" || slot === "Sub") {
+        const vessel = VESSEL_BY_ID[gearId]
+        const kind = slot === "Boat" ? "boat" : "sub"
+        if (!vessel || vessel.kind !== kind || !Number.isInteger(vessels[gearId])) throw new ProfileApiError(400, `Equipped ${slot} must be an owned ${kind}`)
+        continue
+      }
       if (!options || (gearId !== "" && !options.some(([id]) => id === gearId))) throw new ProfileApiError(400, `Invalid equipped gear for ${slot}`)
     }
   }
@@ -290,7 +310,7 @@ export async function GET(request: NextRequest) {
 }
 
 const grantSchema = z.object({
-  type: z.enum(["cash", "set_cash", "xp", "level", "island", "brew", "gear", "find"]),
+  type: z.enum(["cash", "set_cash", "xp", "level", "island", "brew", "gear", "find", "clams", "set_clams", "vessel", "vessel_remove"]),
   amount: z.number().int().optional(),
   level: z.number().int().optional(),
   island: z.string().optional(),
@@ -331,8 +351,20 @@ function validateGrant(input: z.infer<typeof grantSchema>) {
       if (!input.brew || !BREW_IDS.has(input.brew) || !Number.isSafeInteger(input.minutes) || (input.minutes ?? 0) < 1 || (input.minutes ?? 0) > 60) throw new ProfileApiError(400, "Choose a valid brew and duration from 1 to 60 minutes")
       return { type: input.type, brew: input.brew, minutes: input.minutes }
     case "gear":
-      if (!input.item || !GEAR_IDS.has(input.item)) throw new ProfileApiError(400, "Choose a valid gear item")
+      if (!input.item || (!GEAR_IDS.has(input.item) && !LEGACY_VESSEL_GEAR_IDS.has(input.item))) throw new ProfileApiError(400, "Choose a valid gear item")
       return { type: input.type, item: input.item, equip: input.equip ?? false }
+    case "clams":
+      if (!Number.isSafeInteger(input.amount) || input.amount === 0 || (input.amount ?? 0) > 1000) throw new ProfileApiError(400, "Clam changes must be a non-zero integer; grants are capped at +1,000")
+      return { type: input.type, amount: input.amount }
+    case "set_clams":
+      if (!Number.isSafeInteger(input.amount) || (input.amount ?? -1) < 0 || (input.amount ?? 0) > 100_000) throw new ProfileApiError(400, "Clams must be an integer from 0 to 100,000")
+      return { type: input.type, amount: input.amount }
+    case "vessel":
+      if (!input.item || !VESSEL_IDS.has(input.item) || (input.level !== undefined && (!Number.isSafeInteger(input.level) || input.level < 1 || input.level > 6))) throw new ProfileApiError(400, "Choose a valid boat or sub and optional level from 1 to 6")
+      return { type: input.type, item: input.item, ...(input.level !== undefined ? { level: input.level } : {}), equip: input.equip ?? false }
+    case "vessel_remove":
+      if (!input.item || !VESSEL_IDS.has(input.item) || STARTER_VESSEL_IDS.has(input.item)) throw new ProfileApiError(400, "Choose a removable boat or sub")
+      return { type: input.type, item: input.item }
     case "find":
       if (!input.item || !FIND_IDS.has(input.item) || !Number.isSafeInteger(input.count) || (input.count ?? 0) < 1 || (input.count ?? 0) > 1000 || (input.variant && !VARIANTS.includes(input.variant as typeof VARIANTS[number]))) throw new ProfileApiError(400, "Choose a valid find, count from 1 to 1,000, and variant")
       return { type: input.type, item: input.item, count: input.count, variant: input.variant ?? "" }
