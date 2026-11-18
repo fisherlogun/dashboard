@@ -75,6 +75,8 @@ export async function POST(req: NextRequest) {
           cash: Number.isSafeInteger(p.cash) && p.cash >= 0 ? p.cash : null,
           island: typeof p.island === "string" ? p.island.slice(0, 80) : null,
           clams: Number.isSafeInteger(p.clams) && p.clams >= 0 && p.clams <= 100_000 ? p.clams : null,
+          luckyClams: Number.isSafeInteger(p.luckyClams) && p.luckyClams >= 0 && p.luckyClams <= 100_000 ? p.luckyClams : null,
+          rebirths: Number.isSafeInteger(p.rebirths) && p.rebirths >= 0 && p.rebirths <= 100_000 ? p.rebirths : null,
           boat: typeof p.boat === "string" && VESSEL_BY_ID[p.boat]?.kind === "boat" ? p.boat : null,
           sub: typeof p.sub === "string" && VESSEL_BY_ID[p.sub]?.kind === "sub" ? p.sub : null,
         })

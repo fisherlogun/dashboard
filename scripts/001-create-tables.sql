@@ -91,6 +91,8 @@ CREATE TABLE IF NOT EXISTS live_players (
   cash BIGINT,
   island TEXT,
   clams INT,
+  lucky_clams INT,
+  rebirths INT,
   boat TEXT,
   sub TEXT,
   last_heartbeat TIMESTAMPTZ DEFAULT NOW(),
@@ -101,6 +103,8 @@ ALTER TABLE live_players ADD COLUMN IF NOT EXISTS level INT;
 ALTER TABLE live_players ADD COLUMN IF NOT EXISTS cash BIGINT;
 ALTER TABLE live_players ADD COLUMN IF NOT EXISTS island TEXT;
 ALTER TABLE live_players ADD COLUMN IF NOT EXISTS clams INT;
+ALTER TABLE live_players ADD COLUMN IF NOT EXISTS lucky_clams INT;
+ALTER TABLE live_players ADD COLUMN IF NOT EXISTS rebirths INT;
 ALTER TABLE live_players ADD COLUMN IF NOT EXISTS boat TEXT;
 ALTER TABLE live_players ADD COLUMN IF NOT EXISTS sub TEXT;
 

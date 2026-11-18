@@ -310,7 +310,7 @@ export async function GET(request: NextRequest) {
 }
 
 const grantSchema = z.object({
-  type: z.enum(["cash", "set_cash", "xp", "level", "island", "brew", "gear", "find", "clams", "set_clams", "vessel", "vessel_remove"]),
+  type: z.enum(["cash", "set_cash", "xp", "level", "island", "brew", "gear", "find", "clams", "set_clams", "lucky_clams", "set_lucky_clams", "rebirths", "set_rebirths", "vessel", "vessel_remove"]),
   amount: z.number().int().optional(),
   level: z.number().int().optional(),
   island: z.string().optional(),
@@ -358,6 +358,18 @@ function validateGrant(input: z.infer<typeof grantSchema>) {
       return { type: input.type, amount: input.amount }
     case "set_clams":
       if (!Number.isSafeInteger(input.amount) || (input.amount ?? -1) < 0 || (input.amount ?? 0) > 100_000) throw new ProfileApiError(400, "Clams must be an integer from 0 to 100,000")
+      return { type: input.type, amount: input.amount }
+    case "lucky_clams":
+      if (!Number.isSafeInteger(input.amount) || input.amount === 0 || (input.amount ?? 0) > 1000) throw new ProfileApiError(400, "Lucky Clam changes must be a non-zero integer; grants are capped at +1,000")
+      return { type: input.type, amount: input.amount }
+    case "set_lucky_clams":
+      if (!Number.isSafeInteger(input.amount) || (input.amount ?? -1) < 0 || (input.amount ?? 0) > 100_000) throw new ProfileApiError(400, "Lucky Clams must be an integer from 0 to 100,000")
+      return { type: input.type, amount: input.amount }
+    case "rebirths":
+      if (!Number.isSafeInteger(input.amount) || input.amount === 0 || Math.abs(input.amount ?? 0) > 100_000) throw new ProfileApiError(400, "Rebirth changes must be a non-zero integer within 100,000")
+      return { type: input.type, amount: input.amount }
+    case "set_rebirths":
+      if (!Number.isSafeInteger(input.amount) || (input.amount ?? -1) < 0 || (input.amount ?? 0) > 100_000) throw new ProfileApiError(400, "Rebirths must be an integer from 0 to 100,000")
       return { type: input.type, amount: input.amount }
     case "vessel":
       if (!input.item || !VESSEL_IDS.has(input.item) || (input.level !== undefined && (!Number.isSafeInteger(input.level) || input.level < 1 || input.level > 6))) throw new ProfileApiError(400, "Choose a valid boat or sub and optional level from 1 to 6")
