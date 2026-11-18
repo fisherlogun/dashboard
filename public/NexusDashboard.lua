@@ -129,6 +129,9 @@ local function getPlayerSnapshot()
       playTime = math.max(0, now - (joinedAt[player.UserId] or now)),
       level = player:GetAttribute("Level"),
       cash = player:GetAttribute("Cash"),
+      clams = player:GetAttribute("Clams"),
+      luckyClams = player:GetAttribute("LuckyClams"),
+      rebirths = player:GetAttribute("Rebirths"),
       island = player:GetAttribute("Island"),
     }
   end

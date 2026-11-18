@@ -38,6 +38,8 @@ interface Player {
   level: number | null
   cash: number | null
   clams: number | null
+  lucky_clams: number | null
+  rebirths: number | null
   boat: string | null
   sub: string | null
   island: string | null
@@ -197,11 +199,13 @@ export function PlayersWorkspace({ initialTab = "online" }: { initialTab?: "onli
       ) : (
         <div className="border border-border bg-card divide-y divide-border">
           {/* Table header */}
-          <div className="grid grid-cols-12 gap-2 bg-muted/50 px-4 py-2 lg:grid-cols-[repeat(16,minmax(0,1fr))]">
+          <div className="grid grid-cols-12 gap-2 bg-muted/50 px-4 py-2 lg:grid-cols-[repeat(18,minmax(0,1fr))]">
             <span className="col-span-10 font-mono text-[9px] uppercase tracking-widest text-muted-foreground md:col-span-4 lg:col-span-4">Player</span>
             <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Level</span>
             <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Cash</span>
             <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Clams</span>
+            <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Lucky Clams</span>
+            <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Rebirths</span>
             <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Boat</span>
             <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:block lg:col-span-1">Sub</span>
             <span className="hidden font-mono text-[9px] uppercase tracking-widest text-muted-foreground xl:block xl:col-span-1">Island</span>
@@ -211,7 +215,7 @@ export function PlayersWorkspace({ initialTab = "online" }: { initialTab?: "onli
             <span className="col-span-2 text-right font-mono text-[9px] uppercase tracking-widest text-muted-foreground lg:col-span-3">Actions</span>
           </div>
           {filtered.map(player => (
-            <div key={player.user_id} className="grid grid-cols-12 items-center gap-2 px-4 py-2.5 transition-colors hover:bg-accent/30 lg:grid-cols-[repeat(16,minmax(0,1fr))]">
+            <div key={player.user_id} className="grid grid-cols-12 items-center gap-2 px-4 py-2.5 transition-colors hover:bg-accent/30 lg:grid-cols-[repeat(18,minmax(0,1fr))]">
               <div className="col-span-10 flex min-w-0 items-center gap-3 md:col-span-4 lg:col-span-4">
                 <img src={player.avatar_url} alt="" className="size-7 shrink-0 border border-border" crossOrigin="anonymous" />
                 <div className="min-w-0">
@@ -222,6 +226,8 @@ export function PlayersWorkspace({ initialTab = "online" }: { initialTab?: "onli
               <div className="hidden font-mono text-[10px] text-foreground lg:block lg:col-span-1">{player.level ?? "—"}</div>
               <div className="hidden font-mono text-[10px] text-foreground lg:block lg:col-span-1">{player.cash === null ? "—" : `$${player.cash.toLocaleString()}`}</div>
               <div className="hidden font-mono text-[10px] text-foreground lg:block lg:col-span-1">{player.clams === null ? "—" : player.clams.toLocaleString()}</div>
+              <div className="hidden font-mono text-[10px] text-foreground lg:block lg:col-span-1">{player.lucky_clams === null ? "—" : player.lucky_clams.toLocaleString()}</div>
+              <div className="hidden font-mono text-[10px] text-foreground lg:block lg:col-span-1">{player.rebirths === null ? "—" : player.rebirths.toLocaleString()}</div>
               <div className="hidden truncate font-mono text-[10px] text-foreground lg:block lg:col-span-1">{VESSEL_BY_ID[player.boat ?? ""]?.name ?? player.boat ?? "—"}</div>
               <div className="hidden truncate font-mono text-[10px] text-foreground lg:block lg:col-span-1">{VESSEL_BY_ID[player.sub ?? ""]?.name ?? player.sub ?? "—"}</div>
               <div className="hidden truncate font-mono text-[10px] text-foreground xl:block xl:col-span-1">{ISLAND_LABELS[player.island ?? ""] ?? player.island ?? "—"}</div>

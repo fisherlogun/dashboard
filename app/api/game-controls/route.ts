@@ -4,6 +4,7 @@ import { addActionLog, getLiveServers, getMemberRole, getProjectById, isGlobalAd
 import { FIND_IDS, ISLAND_IDS } from "@/lib/game-catalog"
 import { DatastoreConflictError, getVersionedDatastoreEntry, publishMessage, setVersionedDatastoreEntry } from "@/lib/roblox"
 import { getSession } from "@/lib/auth"
+import { easternDateKey, easternTimestamp } from "@/lib/time-format"
 
 type RobloxProject = { universe_id: string; api_key: string }
 
@@ -96,12 +97,15 @@ function nextScheduledStart(event: Record<string, unknown>, nowSeconds: number) 
   if (typeof event.time !== "string") return null
   const [hours, minutes] = event.time.split(":").map(Number)
   const now = new Date(nowSeconds * 1000)
+  const [year, month, dayOfMonth] = easternDateKey(now).split("-").map(Number)
+  const baseDay = new Date(Date.UTC(year, month - 1, dayOfMonth))
   for (let offset = 0; offset <= 8; offset += 1) {
-    const candidate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + offset, hours, minutes, 0))
-    const day = candidate.getUTCDay()
+    const civilDay = new Date(Date.UTC(baseDay.getUTCFullYear(), baseDay.getUTCMonth(), baseDay.getUTCDate() + offset))
+    const day = civilDay.getUTCDay()
     if (event.repeat === "weekly" && !((event.days as number[] | undefined) ?? []).includes(day)) continue
-    const start = Math.floor(candidate.getTime() / 1000)
-    if (start > nowSeconds) return start
+    const dateKey = `${civilDay.getUTCFullYear()}-${String(civilDay.getUTCMonth() + 1).padStart(2, "0")}-${String(civilDay.getUTCDate()).padStart(2, "0")}`
+    const start = easternTimestamp(dateKey, `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`)
+    if (start !== null && start > nowSeconds) return start
   }
   return null
 }
